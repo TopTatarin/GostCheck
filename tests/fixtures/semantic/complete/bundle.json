@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "source_format": "latex",
+  "source_hash": "a88eb52c12eb0a2b1c3abad734631e94621bf446934943dd0b1879df0a02cc0f",
+  "text": "Abstract\nSynthetic annotation evidence.",
+  "extraction_quality": "high",
+  "source_files": [
+    {
+      "path": "synthetic/main.tex",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "spans": [],
+  "pages": [],
+  "sections": [
+    {
+      "section_id": "annotation",
+      "title": "Abstract",
+      "kind": "annotation",
+      "level": 1,
+      "char_start": 0,
+      "char_end": 39,
+      "page_start": null,
+      "page_end": null,
+      "locator": "sha256:a88eb52c12eb0a2b1c3abad734631e94621bf446934943dd0b1879df0a02cc0f:0-39"
+    }
+  ],
+  "chunks": [
+    {
+      "chunk_id": "annotation:1",
+      "text": "Abstract\nSynthetic annotation evidence.",
+      "token_count": 10,
+      "source_hash": "a88eb52c12eb0a2b1c3abad734631e94621bf446934943dd0b1879df0a02cc0f",
+      "section_id": "annotation",
+      "char_start": 0,
+      "content_start": 0,
+      "char_end": 39,
+      "overlap_chars": 0,
+      "page_start": null,
+      "page_end": null,
+      "quote_locator": "sha256:a88eb52c12eb0a2b1c3abad734631e94621bf446934943dd0b1879df0a02cc0f:0-39"
+    }
+  ],
+  "warnings": []
+}

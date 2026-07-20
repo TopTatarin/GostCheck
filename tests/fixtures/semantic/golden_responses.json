@@ -1,0 +1,68 @@
+{
+  "ANN-01": {
+    "chunk_id": "annotation:1",
+    "quote": "Синтетическое доказательство",
+    "elements": ["object_problem", "relevance", "goal", "tasks", "results", "structure"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "INT-01": {
+    "chunk_id": "introduction:1",
+    "quote": "Synthetic evidence",
+    "elements": ["object_location", "importance", "object_problems", "relevance", "existing_solutions", "solution_need"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "TSK-01": {
+    "chunk_id": "постановка-задачи:1",
+    "quote": "Цель измерима",
+    "elements": ["analysis_summary", "goal", "tasks", "expected_result"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "TSK-03": {
+    "chunk_id": "анализ-результатов:1",
+    "quote": "Достигнуто 95 процентов",
+    "elements": ["measurable_goal", "quantitative_results", "goal_result_alignment"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "CON-01": {
+    "chunk_id": "conclusion:1",
+    "quote": "Все задачи сопоставлены",
+    "elements": ["task_results", "key_result", "quantitative_goal_assessment"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "GEN-01": {
+    "chunk_id": "постановка-задачи:1",
+    "quote": "Цель измерима",
+    "elements": ["section_handoffs", "causal_chain"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  }
+}

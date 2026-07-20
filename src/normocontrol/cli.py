@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated, TextIO
 
 import typer
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich.console import Console
 from rich.table import Table
@@ -27,6 +27,7 @@ from normocontrol.llm.disabled import DisabledProvider
 from normocontrol.llm.ollama import OllamaProvider
 from normocontrol.llm.yandex import YandexProvider
 from normocontrol.rubric.loader import load_effective_rubric
+from normocontrol.semantic.engine import SemanticEngine
 
 app = typer.Typer(no_args_is_help=True, help="Автоматизированный нормоконтроль ВКР.")
 rubric_app = typer.Typer(no_args_is_help=True, help="Проверка и просмотр рубрики.")
@@ -206,6 +207,45 @@ def emit_bundle(bundle: DocumentBundle, output_path: Path) -> None:
         encoding="utf-8",
         newline="\n",
     )
+
+
+@app.command("semantic")
+def semantic_command(
+    ctx: typer.Context,
+    bundle_path: Annotated[Path, typer.Argument(help="DocumentBundle JSON из команды extract.")],
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", help="disabled, ollama или yandex; CLI имеет приоритет."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="Модель для локального провайдера."),
+    ] = None,
+) -> None:
+    """Run merge-safe semantic checks and emit a deterministic JSON report."""
+    state = ctx.find_root().obj
+    no_llm = isinstance(state, CliState) and state.no_llm
+    try:
+        config = load_llm_config(
+            provider_override=provider,
+            model_override=model,
+            no_llm=no_llm,
+        )
+        bundle = DocumentBundle.model_validate_json(bundle_path.read_text(encoding="utf-8"))
+    except (ConfigurationError, OSError, ValidationError) as error:
+        typer.echo(f"ERROR cannot load semantic input: {type(error).__name__}", err=True)
+        raise typer.Exit(code=1) from error
+
+    selected: LlmProvider
+    if config.provider is ProviderName.DISABLED:
+        selected = DisabledProvider()
+    elif config.provider is ProviderName.OLLAMA:
+        selected = OllamaProvider(config)
+    else:
+        selected = YandexProvider(config)
+    model_id = config.model or selected.name
+    report = SemanticEngine(selected, model_id=model_id).run(bundle)
+    sys.stdout.write(f"{report.model_dump_json(indent=2)}\n")
 
 
 @app.command("extract")
