@@ -54,6 +54,3 @@ gh pr create --fill
 - Доминик: formal rules, PDF, bibliography, fixtures и метрики.
 - Араик: orchestrator, reporting, GitHub workflows, demo и документация.
 
-Полный порядок задач и промпты находятся в проектном плане, который хранится
-отдельно от репозитория.
-
