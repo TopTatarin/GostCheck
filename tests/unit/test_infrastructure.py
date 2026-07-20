@@ -23,4 +23,3 @@ def test_configure_logging_selects_debug_level(monkeypatch) -> None:
 
     assert captured["level"] == logging.DEBUG
     assert "%(message)s" in str(captured["format"])
-

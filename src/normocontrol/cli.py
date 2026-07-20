@@ -4,14 +4,39 @@ from __future__ import annotations
 
 import shutil
 import sys
+from collections.abc import Sequence
+from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+from typing import TextIO
 
 import typer
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich.console import Console
 from rich.table import Table
 
+from normocontrol.domain import RunReport
+
 app = typer.Typer(no_args_is_help=True, help="Автоматизированный нормоконтроль ВКР.")
-console = Console()
+
+
+class DoctorSettings(BaseSettings):
+    """Environment-only settings needed for offline diagnostics."""
+
+    model_config = SettingsConfigDict(extra="ignore", env_file=None)
+
+    llm_provider: str = "disabled"
+    openai_api_key: SecretStr | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DoctorCheck:
+    """One side-effect-free doctor check result."""
+
+    component: str
+    available: bool
+    detail: str = ""
 
 
 def package_version() -> str:
@@ -29,6 +54,58 @@ def version_callback(value: bool) -> None:
         raise typer.Exit
 
 
+def collect_doctor_checks(settings: DoctorSettings | None = None) -> tuple[DoctorCheck, ...]:
+    """Inspect local executables and configuration without network access."""
+    current_settings = settings or DoctorSettings()
+    provider = current_settings.llm_provider.strip().lower()
+    ollama_available = shutil.which("ollama") is not None
+
+    if provider == "disabled":
+        llm_available = True
+        llm_detail = "disabled by configuration"
+    elif provider == "ollama":
+        llm_available = ollama_available
+        llm_detail = "local executable" if llm_available else "ollama executable not found"
+    else:
+        llm_available = current_settings.openai_api_key is not None
+        llm_detail = "credentials configured" if llm_available else "credentials not configured"
+
+    return (
+        DoctorCheck("Python 3.12", sys.version_info[:2] == (3, 12), sys.version.split()[0]),
+        DoctorCheck("Git", shutil.which("git") is not None),
+        DoctorCheck("latexmk", shutil.which("latexmk") is not None),
+        DoctorCheck("chktex", shutil.which("chktex") is not None),
+        DoctorCheck("Ollama (optional)", ollama_available),
+        DoctorCheck("LLM provider", llm_available, llm_detail),
+    )
+
+
+def render_doctor(checks: Sequence[DoctorCheck], output: TextIO | None = None) -> None:
+    """Render doctor diagnostics to a terminal-safe plain table."""
+    console = Console(
+        file=output or sys.stdout,
+        force_terminal=False,
+        color_system=None,
+        soft_wrap=True,
+    )
+    table = Table(title="GostCheck doctor", box=None, show_header=True)
+    table.add_column("Component")
+    table.add_column("Status")
+    table.add_column("Details")
+    for check in checks:
+        table.add_row(check.component, "OK" if check.available else "not found", check.detail)
+    console.print(table)
+
+
+def emit_report(report: RunReport, output_path: Path | None = None) -> None:
+    """Write only report JSON to stdout or to a UTF-8 file."""
+    payload = f"{report.model_dump_json(indent=2)}\n"
+    if output_path is None:
+        sys.stdout.write(payload)
+        return
+    output_path.write_text(payload, encoding="utf-8", newline="\n")
+
+
 @app.callback()
 def main(
     version_requested: bool = typer.Option(
@@ -44,22 +121,9 @@ def main(
 
 @app.command()
 def doctor() -> None:
-    """Show whether required and optional local tools are available."""
-    checks = {
-        "Python 3.12": sys.version_info[:2] == (3, 12),
-        "Git": shutil.which("git") is not None,
-        "latexmk": shutil.which("latexmk") is not None,
-        "chktex": shutil.which("chktex") is not None,
-        "Ollama (optional)": shutil.which("ollama") is not None,
-    }
-    table = Table(title="GostCheck doctor")
-    table.add_column("Component")
-    table.add_column("Status")
-    for name, available in checks.items():
-        table.add_row(name, "OK" if available else "not found")
-    console.print(table)
+    """Check local prerequisites; missing optional tools do not change exit code 0."""
+    render_doctor(collect_doctor_checks())
 
 
 if __name__ == "__main__":
     app()
-
