@@ -65,6 +65,10 @@ pygments==2.20.0
     # via
     #   pytest
     #   rich
+pylatexenc==2.10
+    # via gostcheck (pyproject.toml)
+pymupdf==1.28.0
+    # via gostcheck (pyproject.toml)
 pyproject-hooks==1.2.0
     # via
     #   build

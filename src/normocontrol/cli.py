@@ -18,6 +18,9 @@ from rich.table import Table
 
 from normocontrol.domain import RunReport
 from normocontrol.errors import LocatedValidationError
+from normocontrol.extract.base import DocumentBundle, ExtractionError
+from normocontrol.extract.latex import LatexExtractor
+from normocontrol.extract.pdf import PdfExtractor
 from normocontrol.rubric.loader import load_effective_rubric
 
 app = typer.Typer(no_args_is_help=True, help="Автоматизированный нормоконтроль ВКР.")
@@ -127,6 +130,45 @@ def main(
 def doctor() -> None:
     """Check local prerequisites; missing optional tools do not change exit code 0."""
     render_doctor(collect_doctor_checks())
+
+
+def emit_bundle(bundle: DocumentBundle, output_path: Path) -> None:
+    """Write a bundle as deterministic UTF-8 JSON, creating only its parent directory."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        f"{bundle.model_dump_json(indent=2)}\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+@app.command("extract")
+def extract_command(
+    source: Annotated[Path, typer.Argument(help="Главный .tex или PDF-файл.")],
+    output: Annotated[Path, typer.Option("--out", help="Выходной DocumentBundle JSON.")],
+    project_root: Annotated[
+        Path | None,
+        typer.Option("--project-root", help="Корень для безопасного раскрытия LaTeX include."),
+    ] = None,
+    token_budget: Annotated[
+        int,
+        typer.Option("--token-budget", min=1, help="Максимальный бюджет одного chunk."),
+    ] = 800,
+) -> None:
+    """Safely extract LaTeX/PDF into a local, addressable DocumentBundle."""
+    root = project_root or source.parent
+    suffix = source.suffix.casefold()
+    try:
+        if suffix == ".tex":
+            bundle = LatexExtractor(root, token_budget=token_budget).extract(source)
+        elif suffix == ".pdf":
+            bundle = PdfExtractor(root, token_budget=token_budget).extract(source)
+        else:
+            raise ExtractionError("supported source extensions are .tex and .pdf")
+        emit_bundle(bundle, output)
+    except ExtractionError as error:
+        typer.echo(f"ERROR {error}", err=True)
+        raise typer.Exit(code=1) from error
 
 
 @rubric_app.command("validate")
