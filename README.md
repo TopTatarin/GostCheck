@@ -74,6 +74,21 @@ python -m pip install --no-deps -e .
 
 ## Проверки разработки
 
+### Проверка рубрики и профили
+
+`work_profile` задаётся пользователем явно и принимает одно из значений `software`,
+`research` или `organizational`. Значения `auto` нет: рекомендация LLM может быть только
+предупреждением и не меняет профиль или gate. Параметры draft-рубрики разворачиваются только
+после перечисления в `approved_params`; для остальных выводится `APPROVAL_REQUIRED`.
+
+```powershell
+normocontrol rubric validate --rubric rubric.yaml --config normocontrol.yaml.example
+```
+
+Команда возвращает `0` для валидной рубрики и `3` для ошибки формата/конфигурации. Диагностика
+содержит файл и YAML path. Конфигурации могут наследовать локальные YAML-файлы через `include`
+(строка или список путей относительно включающего файла); циклические include запрещены.
+
 ```powershell
 python -m ruff format --check .
 python -m ruff check .

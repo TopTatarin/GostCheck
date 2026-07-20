@@ -1,7 +1,18 @@
 version: 1
-profile: software
+# Профиль задаёт пользователь; auto/LLM-выбор намеренно не поддерживается.
+work_profile: software
 rubric_path: rubric.yaml
 output_dir: build/normocontrol
+approved_params:
+  - font_size_pt
+  - fig_numbering
+  - defense_year
+  - recent_sources_share
+params:
+  font_size_pt: 14
+  fig_numbering: "сквозная"
+  defense_year: 2026
+  recent_sources_share: 0.5
 llm:
   # disabled | ollama | имя облачного провайдера
   provider: disabled

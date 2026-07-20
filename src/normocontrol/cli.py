@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import TextIO
+from typing import Annotated, TextIO
 
 import typer
 from pydantic import SecretStr
@@ -17,8 +17,12 @@ from rich.console import Console
 from rich.table import Table
 
 from normocontrol.domain import RunReport
+from normocontrol.errors import LocatedValidationError
+from normocontrol.rubric.loader import load_effective_rubric
 
 app = typer.Typer(no_args_is_help=True, help="Автоматизированный нормоконтроль ВКР.")
+rubric_app = typer.Typer(no_args_is_help=True, help="Проверка и просмотр рубрики.")
+app.add_typer(rubric_app, name="rubric")
 
 
 class DoctorSettings(BaseSettings):
@@ -123,6 +127,34 @@ def main(
 def doctor() -> None:
     """Check local prerequisites; missing optional tools do not change exit code 0."""
     render_doctor(collect_doctor_checks())
+
+
+@rubric_app.command("validate")
+def rubric_validate(
+    rubric: Annotated[Path, typer.Option("--rubric", help="Путь к rubric.yaml.")] = Path(
+        "rubric.yaml"
+    ),
+    config: Annotated[Path, typer.Option("--config", help="Путь к конфигурации.")] = Path(
+        "normocontrol.yaml"
+    ),
+) -> None:
+    """Validate rubric and explicit profile; invalid input exits with code 3."""
+    try:
+        effective = load_effective_rubric(rubric, config)
+    except LocatedValidationError as error:
+        typer.echo(f"ERROR {error}", err=True)
+        raise typer.Exit(code=3) from error
+
+    counts = {severity: 0 for severity in ("error", "warn", "info")}
+    for rule in effective.rules:
+        counts[rule.severity.value] += 1
+    typer.echo(
+        f"OK: 64 rules; severity error={counts['error']}, "
+        f"warn={counts['warn']}, info={counts['info']}; "
+        f"profile={effective.work_profile.value}"
+    )
+    for warning in effective.warnings:
+        typer.echo(f"WARNING {warning.code} {warning.yaml_path}: {warning.message}")
 
 
 if __name__ == "__main__":

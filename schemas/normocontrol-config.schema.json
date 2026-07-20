@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gostcheck.local/schemas/normocontrol-config.schema.json",
+  "title": "GostCheck configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "work_profile"],
+  "properties": {
+    "include": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      ]
+    },
+    "version": {"const": 1},
+    "work_profile": {"enum": ["software", "research", "organizational"]},
+    "rubric_path": {"type": "string", "minLength": 1},
+    "output_dir": {"type": "string", "minLength": 1},
+    "approved_params": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["font_size_pt", "fig_numbering", "defense_year", "recent_sources_share"]}
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "font_size_pt": {"type": "integer", "minimum": 8, "maximum": 72},
+        "fig_numbering": {"enum": ["сквозная", "по разделам"]},
+        "defense_year": {"type": "integer", "minimum": 2000, "maximum": 2100},
+        "recent_sources_share": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "llm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": ["string", "null"]},
+        "base_url": {"type": ["string", "null"]},
+        "allow_cloud_data": {"type": "boolean"}
+      }
+    }
+  }
+}
