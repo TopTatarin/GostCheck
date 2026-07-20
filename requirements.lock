@@ -8,12 +8,20 @@ annotated-doc==0.0.4
     # via typer
 annotated-types==0.7.0
     # via pydantic
+anyio==4.14.2
+    # via
+    #   httpx
+    #   openai
 attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
 build==1.5.0
     # via pip-tools
+certifi==2026.6.17
+    # via
+    #   httpcore
+    #   httpx
 click==8.4.2
     # via pip-tools
 colorama==0.4.6
@@ -21,11 +29,28 @@ colorama==0.4.6
     #   build
     #   click
     #   pytest
+    #   tqdm
     #   typer
 coverage[toml]==7.15.2
     # via pytest-cov
+distro==1.9.0
+    # via openai
+h11==0.16.0
+    # via httpcore
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via
+    #   gostcheck (pyproject.toml)
+    #   openai
+idna==3.18
+    # via
+    #   anyio
+    #   httpx
 iniconfig==2.3.0
     # via pytest
+jiter==0.16.0
+    # via openai
 jsonschema==4.26.0
     # via gostcheck (pyproject.toml)
 jsonschema-specifications==2025.9.1
@@ -40,6 +65,8 @@ mypy==1.20.2
     # via gostcheck (pyproject.toml)
 mypy-extensions==1.1.0
     # via mypy
+openai==1.109.1
+    # via gostcheck (pyproject.toml)
 packaging==26.2
     # via
     #   build
@@ -56,6 +83,7 @@ pluggy==1.6.0
 pydantic==2.13.4
     # via
     #   gostcheck (pyproject.toml)
+    #   openai
     #   pydantic-settings
 pydantic-core==2.46.4
     # via pydantic
@@ -99,13 +127,21 @@ ruff==0.15.22
     # via gostcheck (pyproject.toml)
 shellingham==1.5.4
     # via typer
+sniffio==1.3.1
+    # via openai
+tenacity==9.1.4
+    # via gostcheck (pyproject.toml)
+tqdm==4.69.0
+    # via openai
 typer==0.27.0
     # via gostcheck (pyproject.toml)
 types-pyyaml==6.0.12.20260518
     # via gostcheck (pyproject.toml)
 typing-extensions==4.16.0
     # via
+    #   anyio
     #   mypy
+    #   openai
     #   pydantic
     #   pydantic-core
     #   referencing

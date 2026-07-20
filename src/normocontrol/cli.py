@@ -17,15 +17,22 @@ from rich.console import Console
 from rich.table import Table
 
 from normocontrol.domain import RunReport
-from normocontrol.errors import LocatedValidationError
+from normocontrol.errors import ConfigurationError, LocatedValidationError
 from normocontrol.extract.base import DocumentBundle, ExtractionError
 from normocontrol.extract.latex import LatexExtractor
 from normocontrol.extract.pdf import PdfExtractor
+from normocontrol.llm.base import LlmProvider
+from normocontrol.llm.config import ProviderName, load_llm_config
+from normocontrol.llm.disabled import DisabledProvider
+from normocontrol.llm.ollama import OllamaProvider
+from normocontrol.llm.yandex import YandexProvider
 from normocontrol.rubric.loader import load_effective_rubric
 
 app = typer.Typer(no_args_is_help=True, help="Автоматизированный нормоконтроль ВКР.")
 rubric_app = typer.Typer(no_args_is_help=True, help="Проверка и просмотр рубрики.")
+llm_app = typer.Typer(no_args_is_help=True, help="Диагностика LLM-провайдеров.")
 app.add_typer(rubric_app, name="rubric")
+app.add_typer(llm_app, name="llm")
 
 
 class DoctorSettings(BaseSettings):
@@ -44,6 +51,13 @@ class DoctorCheck:
     component: str
     available: bool
     detail: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class CliState:
+    """Global command-line switches shared by subcommands."""
+
+    no_llm: bool = False
 
 
 def package_version() -> str:
@@ -115,6 +129,7 @@ def emit_report(report: RunReport, output_path: Path | None = None) -> None:
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version_requested: bool = typer.Option(
         False,
         "--version",
@@ -122,14 +137,65 @@ def main(
         is_eager=True,
         help="Показать версию и выйти.",
     ),
+    no_llm: bool = typer.Option(
+        False,
+        "--no-llm",
+        help="Отключить все LLM-вызовы независимо от переменных окружения.",
+    ),
 ) -> None:
     """Run the GostCheck command-line interface."""
+    del version_requested
+    ctx.obj = CliState(no_llm=no_llm)
 
 
 @app.command()
 def doctor() -> None:
     """Check local prerequisites; missing optional tools do not change exit code 0."""
     render_doctor(collect_doctor_checks())
+
+
+@llm_app.command("doctor")
+def llm_doctor(
+    ctx: typer.Context,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", help="disabled, ollama или yandex; CLI имеет приоритет."),
+    ] = None,
+    base_url: Annotated[
+        str | None,
+        typer.Option("--base-url", help="OpenAI-совместимый базовый URL."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="Локальная модель Ollama; Yandex URI задаётся через env."),
+    ] = None,
+) -> None:
+    """Probe ``/models``; provider failures remain advisory and exit successfully."""
+    state = ctx.find_root().obj
+    no_llm = isinstance(state, CliState) and state.no_llm
+    try:
+        config = load_llm_config(
+            provider_override=provider,
+            base_url_override=base_url,
+            model_override=model,
+            no_llm=no_llm,
+        )
+    except ConfigurationError as error:
+        typer.echo(f"ERROR {error}", err=True)
+        raise typer.Exit(code=1) from error
+
+    selected: LlmProvider
+    if config.provider is ProviderName.DISABLED:
+        selected = DisabledProvider()
+    elif config.provider is ProviderName.OLLAMA:
+        selected = OllamaProvider(config)
+    else:
+        selected = YandexProvider(config)
+    probe = selected.health_check()
+    status = "OK" if probe.available and probe.model_available else "UNVERIFIABLE"
+    if config.provider is ProviderName.DISABLED:
+        status = "SKIPPED"
+    typer.echo(f"provider={probe.provider} status={status} detail={probe.detail}")
 
 
 def emit_bundle(bundle: DocumentBundle, output_path: Path) -> None:
