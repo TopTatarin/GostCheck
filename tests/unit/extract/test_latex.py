@@ -112,7 +112,9 @@ def test_symlink_outside_root_is_rejected(tmp_path: Path) -> None:
             LatexExtractor(root).extract(main)
     finally:
         # Remove only the reparse point, never its external target.
-        if link.exists() or link.is_symlink():
+        if link.is_symlink():
+            link.unlink()
+        elif link.exists():
             os.rmdir(link)
 
 
