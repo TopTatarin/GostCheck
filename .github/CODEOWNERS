@@ -1,2 +1,5 @@
-# Until collaborators' GitHub usernames are known, the repository owner reviews all changes.
-* @TopTatarin
+# Владельцы файлов проекта
+* @TopTatarin @BabanAlan @aphogato
+
+# Изменять правила владения может владелец репозитория
+/.github/CODEOWNERS @TopTatarin
