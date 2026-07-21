@@ -18,4 +18,3 @@ def test_doctor_does_not_fail_when_optional_tools_are_missing() -> None:
     assert result.exit_code == 0
     assert "Python 3.12" in result.stdout
     assert "Ollama (optional)" in result.stdout
-

@@ -167,10 +167,10 @@ rules:
     check: "biblatex-gost style=gost-numeric, sorting=none; script: литеральные '[\\d+]' в тексте вне \\cite → error («ручная» ссылка)"
     severity: error
   - id: BIB-03
-    src: "M2 §2.12"
-    rule: "Библиографические записи по ГОСТ Р 7.0.5-2008"
+    src: "M1 §1.2.3; M2 §2.12"
+    rule: "Отсылки оформлены по ГОСТ Р 7.0.5-2008, библиографические описания — по ГОСТ Р 7.0.100-2018"
     layer: class+script
-    check: "рендер — biblatex-gost; script-линт .bib: обязательные поля по типу записи (author, title, year; для @online — url)"
+    check: "ссылки: ГОСТ Р 7.0.5-2008; рендер и script-линт .bib по ГОСТ Р 7.0.100-2018: обязательные поля по типу записи (author, title, year; для @online — url)"
     severity: error
   - id: BIB-04
     src: "M1 §1.2.3"
@@ -270,7 +270,7 @@ rules:
     src: "M2 §2.3"
     rule: "Обзор рассматривает исследования за последние 5 лет"
     layer: script
-    check: "доля источников с year >= defense_year-5 среди цитируемых в разделе 2 >= {recent_sources_share}"
+    check: "доля источников с year >= {defense_year}-5 среди цитируемых в разделе 2 >= {recent_sources_share}"
     severity: warn
   - id: REV-04
     src: "M2 §2.3"

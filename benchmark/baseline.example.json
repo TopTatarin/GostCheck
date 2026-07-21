@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "provider": "ollama",
+  "model": "qwen3:8b-q4_K_M",
+  "model_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "ollama_version": "ollama version 0.x",
+  "gpu": {
+    "available": true,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "vram_mib": 12282,
+    "driver_version": "example-only",
+    "driver_supported": true
+  },
+  "processor": {
+    "mode": "gpu",
+    "cpu_percent": 0,
+    "gpu_percent": 100
+  },
+  "settings": {
+    "num_ctx": 8192,
+    "max_concurrency": 1,
+    "max_output_tokens": 512,
+    "warming_pass": true,
+    "force_cpu": false
+  },
+  "prompt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "tokens": {
+    "input_tokens": 128,
+    "output_tokens": 32,
+    "total_tokens": 160
+  },
+  "timing": {
+    "warmup_seconds": 4.25,
+    "latency_seconds": 1.75,
+    "tokens_per_second": 18.2857142857
+  },
+  "schema_valid": true,
+  "advisory_status": "info"
+}

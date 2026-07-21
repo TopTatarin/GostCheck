@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gostcheck.local/schemas/rubric.schema.json",
+  "title": "GostCheck rubric",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "rules"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sources", "layers", "severity", "policy", "params_to_approve"],
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "sources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["M1", "M2", "DEP"],
+          "properties": {
+            "M1": {"type": "string", "minLength": 1},
+            "M2": {"type": "string", "minLength": 1},
+            "DEP": {"type": "string", "minLength": 1}
+          }
+        },
+        "layers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["class", "script", "llm", "vision"],
+          "properties": {
+            "class": {"type": "string", "minLength": 1},
+            "script": {"type": "string", "minLength": 1},
+            "llm": {"type": "string", "minLength": 1},
+            "vision": {"type": "string", "minLength": 1}
+          }
+        },
+        "severity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["error", "warn", "info"],
+          "properties": {
+            "error": {"type": "string", "minLength": 1},
+            "warn": {"type": "string", "minLength": 1},
+            "info": {"type": "string", "minLength": 1}
+          }
+        },
+        "policy": {"type": "string", "minLength": 1},
+        "params_to_approve": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["font_size_pt", "fig_numbering", "defense_year", "recent_sources_share"],
+          "properties": {
+            "font_size_pt": {"type": "integer", "minimum": 8, "maximum": 72},
+            "fig_numbering": {"enum": ["сквозная", "по разделам"]},
+            "defense_year": {"type": "integer", "minimum": 2000, "maximum": 2100},
+            "recent_sources_share": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 64,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "src", "rule", "layer", "check", "severity"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Z]{3}-[0-9]{2}$"},
+          "src": {"type": "string", "minLength": 1},
+          "rule": {"type": "string", "minLength": 1},
+          "layer": {"enum": ["class", "script", "class+script", "llm", "vision", "script+llm"]},
+          "check": {"type": "string", "minLength": 1},
+          "severity": {"enum": ["error", "warn", "info"]},
+          "severity_final": {"enum": ["error", "warn", "info"]}
+        }
+      }
+    }
+  }
+}

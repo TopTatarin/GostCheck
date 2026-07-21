@@ -1,0 +1,13 @@
+{
+  "profile": "research",
+  "enabled_count": 57,
+  "disabled_ids": [
+    "ARC-01",
+    "ARC-02",
+    "ALG-01",
+    "ALG-02",
+    "ALG-03",
+    "IMP-01",
+    "IMP-02"
+  ]
+}
