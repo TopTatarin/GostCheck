@@ -43,6 +43,7 @@ packages = ["src/normocontrol"]
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers -m 'not live'"
 testpaths = ["tests"]
+pythonpath = ["src", "."]
 markers = [
   "live: tests that use external services; excluded from the default test run",
 ]

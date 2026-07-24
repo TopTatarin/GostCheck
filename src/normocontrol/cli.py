@@ -16,7 +16,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich.console import Console
 from rich.table import Table
 
-from normocontrol.domain import RunReport
+from normocontrol.domain import ExitCode, RunReport, StageResult
 from normocontrol.errors import ConfigurationError, LocatedValidationError
 from normocontrol.extract.base import DocumentBundle, ExtractionError
 from normocontrol.extract.latex import LatexExtractor
@@ -26,7 +26,12 @@ from normocontrol.llm.config import ProviderName, load_llm_config
 from normocontrol.llm.disabled import DisabledProvider
 from normocontrol.llm.ollama import OllamaProvider
 from normocontrol.llm.yandex import YandexProvider
-from normocontrol.rubric.loader import load_effective_rubric
+from normocontrol.rubric.expansion import expand_rubric
+from normocontrol.rubric.loader import load_config, load_effective_rubric, load_rubric
+from normocontrol.rubric.models import EffectiveRubric, NormocontrolConfig, WorkProfile
+from normocontrol.rules.context import ExecutionContext, LatexProject
+from normocontrol.rules.engine import FormalEngine
+from normocontrol.rules.register import default_formal_registry
 from normocontrol.semantic.engine import SemanticEngine
 
 app = typer.Typer(no_args_is_help=True, help="Автоматизированный нормоконтроль ВКР.")
@@ -126,6 +131,63 @@ def emit_report(report: RunReport, output_path: Path | None = None) -> None:
         sys.stdout.write(payload)
         return
     output_path.write_text(payload, encoding="utf-8", newline="\n")
+
+
+def load_effective_rubric_for_check(
+    rubric_path: Path,
+    config_path: Path,
+    profile: str | None = None,
+) -> tuple[EffectiveRubric, NormocontrolConfig]:
+    """Load rubric/config and optionally override the work profile."""
+    config = load_config(config_path)
+    if profile is not None:
+        try:
+            chosen = WorkProfile(profile)
+        except ValueError as error:
+            msg = f"unknown profile: {profile}"
+            raise typer.BadParameter(msg) from error
+        config = config.model_copy(update={"work_profile": chosen})
+    return expand_rubric(load_rubric(rubric_path), config), config
+
+
+def run_formal_check(
+    source: Path,
+    *,
+    rubric_path: Path,
+    config_path: Path,
+    profile: str | None = None,
+    project_root: Path | None = None,
+) -> RunReport:
+    """Extract inputs and run deterministic formal rules."""
+    rubric, config = load_effective_rubric_for_check(rubric_path, config_path, profile)
+    root = project_root or source.parent
+    suffix = source.suffix.casefold()
+    latex: LatexProject | None = None
+    pdf_path: Path | None = None
+    if suffix == ".tex":
+        resolved = source.resolve()
+        latex = LatexProject(root=root.resolve(), main_tex=resolved)
+        bundle = LatexExtractor(root).extract(resolved)
+    elif suffix == ".pdf":
+        pdf_path = source.resolve()
+        bundle = PdfExtractor(root).extract(pdf_path)
+    else:
+        raise ExtractionError("supported source extensions are .tex and .pdf")
+
+    context = ExecutionContext(
+        rubric=rubric,
+        config=config,
+        bundle=bundle,
+        latex=latex,
+        pdf_path=pdf_path,
+        bib_paths=(),
+    )
+    result = FormalEngine(default_formal_registry()).run(context)
+    return RunReport(
+        tool_version=package_version(),
+        exit_code=ExitCode(result.exit_code),
+        stages=(StageResult(name="formal", findings=result.findings),),
+    )
 
 
 @app.callback()
@@ -246,6 +308,42 @@ def semantic_command(
     model_id = config.model or selected.name
     report = SemanticEngine(selected, model_id=model_id).run(bundle)
     sys.stdout.write(f"{report.model_dump_json(indent=2)}\n")
+
+
+@app.command("check")
+def check_command(
+    source: Annotated[Path, typer.Argument(help="Главный .tex или PDF-файл.")],
+    profile: Annotated[
+        str | None,
+        typer.Option("--profile", help="software, research или organizational."),
+    ] = None,
+    rubric: Annotated[Path, typer.Option("--rubric", help="Путь к rubric.yaml.")] = Path(
+        "rubric.yaml"
+    ),
+    config: Annotated[Path, typer.Option("--config", help="Путь к конфигурации.")] = Path(
+        "normocontrol.yaml.example"
+    ),
+    output: Annotated[Path | None, typer.Option("--out", help="JSON-отчёт RunReport.")] = None,
+    project_root: Annotated[
+        Path | None,
+        typer.Option("--project-root", help="Корень LaTeX-проекта для include."),
+    ] = None,
+) -> None:
+    """Run deterministic formal checks and emit a RunReport JSON."""
+    try:
+        report = run_formal_check(
+            source,
+            rubric_path=rubric,
+            config_path=config,
+            profile=profile,
+            project_root=project_root,
+        )
+    except (ExtractionError, LocatedValidationError) as error:
+        typer.echo(f"ERROR {error}", err=True)
+        raise typer.Exit(code=1) from error
+
+    emit_report(report, output)
+    raise typer.Exit(code=int(report.exit_code))
 
 
 @app.command("extract")

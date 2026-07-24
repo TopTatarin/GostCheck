@@ -163,6 +163,8 @@ class PdfExtractor(DocumentExtractor):
                         if bbox.x0 == bbox.x1 or bbox.y0 == bbox.y1:
                             zero_bbox = True
                         font_size = float(item.get("size", 0.0))
+                        flags_raw = item.get("flags")
+                        flags = int(flags_raw) if flags_raw is not None else None
                         spans.append(
                             TextSpan(
                                 text=value,
@@ -171,6 +173,7 @@ class PdfExtractor(DocumentExtractor):
                                 char_end=end,
                                 font=str(item.get("font", "")) or None,
                                 font_size=font_size,
+                                flags=flags,
                                 bbox=bbox,
                             )
                         )
