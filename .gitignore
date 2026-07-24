@@ -21,6 +21,8 @@ student-work/
 reports/
 artifacts/
 *.pdf
+!tests/fixtures/pdf/
+!tests/fixtures/pdf/**
 *.doc
 *.docx
 *.odt
