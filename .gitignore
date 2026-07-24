@@ -18,6 +18,9 @@ datasets/private/
 submissions/
 theses/
 student-work/
+samples/private/**
+!samples/private/.gitkeep
+!samples/private/.gitignore
 reports/
 artifacts/
 *.pdf

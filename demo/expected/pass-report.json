@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.1",
+  "exit_code": 0,
+  "gate_status": "pass",
+  "profile": "software",
+  "counts": {
+    "formal_errors": 0,
+    "approvals_required": 0
+  },
+  "blocking_rule_ids": [],
+  "marker": "<!-- normocontrol-report -->",
+  "required_github_checks": [
+    "lint-and-unit",
+    "formal-gate"
+  ],
+  "never_required_github_checks": [
+    "build-latex",
+    "publish-report",
+    "semantic-ollama",
+    "semantic-yandex",
+    "semantic-disabled",
+    "publish-semantic"
+  ],
+  "pr_comment_marker": "<!-- normocontrol-report -->",
+  "manual_approval": "Нормоконтролёр подтверждает merge после зелёного formal-gate (и advisory comment)."
+}
