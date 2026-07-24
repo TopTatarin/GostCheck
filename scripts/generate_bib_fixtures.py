@@ -24,12 +24,20 @@ def _write_fixture(name: str, *, main_tex: str, refs_bib: str) -> None:
     (target / "refs.bib").write_text(refs_bib, encoding="utf-8", newline="\n")
 
 
-def _article(key: str, *, author: str, title: str, year: int, url: str = "", urldate: str = "") -> str:
+def _article(
+    key: str,
+    *,
+    author: str,
+    title: str,
+    year: int,
+    url: str = "",
+    urldate: str = "",
+) -> str:
     lines = [
         f"@article{{{key},",
         f"  author = {{{author}}},",
         f"  title = {{{title}}},",
-        f"  journaltitle = {{Journal of Testing}},",
+        "  journaltitle = {Journal of Testing},",
         f"  year = {{{year}}},",
     ]
     if url:
@@ -52,7 +60,7 @@ def _foreign_article(index: int, *, year: int) -> str:
 def _russian_article(index: int, *, year: int) -> str:
     return _article(
         f"ru{index:02d}",
-        author=f"Иванов, И. И.",
+        author="Иванов, И. И.",
         title=f"Отечественное исследование {index}",
         year=year,
     )
@@ -73,8 +81,12 @@ def _online(key: str, *, with_urldate: bool) -> str:
 
 def _pass_bib() -> str:
     entries = [_online("online01", with_urldate=True)]
-    entries.extend(_foreign_article(index, year=2024 if index % 2 else 2023) for index in range(1, 13))
-    entries.extend(_russian_article(index, year=2024 if index % 2 else 2022) for index in range(1, 9))
+    entries.extend(
+        _foreign_article(index, year=2024 if index % 2 else 2023) for index in range(1, 13)
+    )
+    entries.extend(
+        _russian_article(index, year=2024 if index % 2 else 2022) for index in range(1, 9)
+    )
     return "\n\n".join(entries) + "\n"
 
 
