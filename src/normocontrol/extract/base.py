@@ -104,6 +104,7 @@ class TextSpan(ContractModel):
     char_end: int = Field(ge=0)
     font: str | None = None
     font_size: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    flags: int | None = None
     bbox: BoundingBox
 
     @model_validator(mode="after")

@@ -1,0 +1,201 @@
+version: 1
+fixtures:
+- id: d02-pass
+  labels:
+    SYS-01: silent
+    SYS-02: silent
+    SYS-03: silent
+    STR-01: silent
+    STR-02: silent
+    STR-03: silent
+    STR-04: silent
+    ANN-02: silent
+    INT-02: silent
+  latex: tests/fixtures/latex/pass
+- id: d02-fail-sys01
+  labels:
+    SYS-01: fail
+  latex: tests/fixtures/latex/fail_sys01
+- id: d02-fail-sys02
+  labels:
+    SYS-02: fail
+  latex: tests/fixtures/latex/fail_sys02
+- id: d02-fail-str01
+  labels:
+    STR-01: fail
+  latex: tests/fixtures/latex/fail_str01
+- id: d02-fail-str02
+  labels:
+    STR-02: fail
+  latex: tests/fixtures/latex/fail_str02
+- id: d02-fail-ann02
+  labels:
+    ANN-02: fail
+  latex: tests/fixtures/latex/fail_ann02
+- id: d02-fail-int02
+  labels:
+    INT-02: fail
+  latex: tests/fixtures/latex/fail_int02
+- id: d03-pdf-pass
+  labels:
+    FMT-01: silent
+    FMT-02: silent
+    FMT-03: silent
+    FMT-04: silent
+    FMT-05: silent
+  latex: tests/fixtures/latex/pass
+  pdf: tests/fixtures/pdf/fmt_pass.pdf
+- id: d03-pdf-wrong-font
+  labels:
+    FMT-01: fail
+  latex: tests/fixtures/latex/pass
+  pdf: tests/fixtures/pdf/fmt_wrong_font.pdf
+- id: d03-pdf-non-bold-heading
+  labels:
+    FMT-02: fail
+  latex: tests/fixtures/latex/pass
+  pdf: tests/fixtures/pdf/fmt_non_bold_heading.pdf
+- id: d03-pdf-margin-overflow
+  labels:
+    FMT-05: fail
+  latex: tests/fixtures/latex/pass
+  pdf: tests/fixtures/pdf/fmt_margin_overflow.pdf
+- id: d04-floats-pass
+  labels:
+    FIG-01: silent
+    FIG-02: silent
+    FIG-03: silent
+    FIG-04: silent
+    FIG-05: silent
+    FIG-06: silent
+    FIG-07: silent
+    TAB-01: silent
+    TAB-02: silent
+    TAB-03: silent
+    CAP-01: silent
+    MTH-01: silent
+  latex: tests/fixtures/latex/floats/pass
+- id: d04-fail-fig02
+  labels:
+    FIG-02: fail
+  latex: tests/fixtures/latex/floats/fail_fig02
+- id: d04-fail-fig03
+  labels:
+    FIG-03: fail
+    FIG-02: fail
+  latex: tests/fixtures/latex/floats/fail_fig03
+- id: d04-fail-cap01
+  labels:
+    CAP-01: fail
+  latex: tests/fixtures/latex/floats/fail_cap01
+- id: d04-fail-mth01
+  labels:
+    MTH-01: fail
+  latex: tests/fixtures/latex/floats/fail_mth01
+- id: d04-fig01-pass
+  labels:
+    FIG-01: silent
+    FIG-02: silent
+    FIG-03: silent
+    FIG-04: silent
+    FIG-05: silent
+    FIG-06: silent
+    FIG-07: silent
+    TAB-01: silent
+    TAB-02: silent
+    TAB-03: silent
+    CAP-01: silent
+    MTH-01: silent
+  latex: tests/fixtures/latex/floats/pass
+  pdf: tests/fixtures/pdf/fig01_pass.pdf
+- id: d04-fig01-warn
+  labels:
+    FIG-01: warn
+    FIG-02: silent
+    FIG-03: silent
+    FIG-04: silent
+    FIG-05: silent
+    FIG-06: silent
+    FIG-07: silent
+    TAB-01: silent
+    TAB-02: silent
+    TAB-03: silent
+    CAP-01: silent
+    MTH-01: silent
+  latex: tests/fixtures/latex/floats/pass
+  pdf: tests/fixtures/pdf/fig01_warn.pdf
+- id: d05-bib-pass
+  labels:
+    BIB-01: silent
+    BIB-02: silent
+    BIB-03: silent
+    BIB-04: silent
+    BIB-05: silent
+    REV-01: silent
+    REV-02: silent
+    REV-03: silent
+    REV-04: silent
+    REV-07: silent
+  latex: tests/fixtures/latex/bib/pass
+  bib_paths:
+  - tests/fixtures/latex/bib/pass/refs.bib
+- id: d05-fail-bib01
+  labels:
+    BIB-01: fail
+  latex: tests/fixtures/latex/bib/fail_bib01
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_bib01/refs.bib
+- id: d05-fail-bib02
+  labels:
+    BIB-02: fail
+  latex: tests/fixtures/latex/bib/fail_bib02
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_bib02/refs.bib
+- id: d05-fail-bib03
+  labels:
+    BIB-03: fail
+  latex: tests/fixtures/latex/bib/fail_bib03
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_bib03/refs.bib
+- id: d05-fail-bib04
+  labels:
+    BIB-04: fail
+  latex: tests/fixtures/latex/bib/fail_bib04
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_bib04/refs.bib
+- id: d05-fail-bib05
+  labels:
+    BIB-05: warn
+  latex: tests/fixtures/latex/bib/fail_bib05
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_bib05/refs.bib
+- id: d05-fail-rev01
+  labels:
+    REV-01: warn
+  latex: tests/fixtures/latex/bib/fail_rev01
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_rev01/refs.bib
+- id: d05-fail-rev02
+  labels:
+    REV-02: warn
+  latex: tests/fixtures/latex/bib/fail_rev02
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_rev02/refs.bib
+- id: d05-fail-rev03
+  labels:
+    REV-03: warn
+  latex: tests/fixtures/latex/bib/fail_rev03
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_rev03/refs.bib
+- id: d05-fail-rev04
+  labels:
+    REV-04: fail
+  latex: tests/fixtures/latex/bib/fail_rev04
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_rev04/refs.bib
+- id: d05-fail-rev07
+  labels:
+    REV-07: warn
+  latex: tests/fixtures/latex/bib/fail_rev07
+  bib_paths:
+  - tests/fixtures/latex/bib/fail_rev07/refs.bib
