@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,12 @@ RUBRIC = ROOT / "rubric.yaml"
 CONFIG = ROOT / "normocontrol.yaml.example"
 
 runner = CliRunner()
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(text: str) -> str:
+    """Strip ANSI; Typer Rich help splits ``--out`` across color spans under GITHUB_ACTIONS."""
+    return _ANSI_RE.sub("", text)
 
 
 class _SuccessBuild(LatexBuildService):
@@ -42,12 +49,17 @@ def _mock_build(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "run_pipeline", fake_pipeline)
 
 
-def test_run_help_lists_options() -> None:
+def test_run_help_lists_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    # CI sets GITHUB_ACTIONS → Typer Rich colors; highlighter splits ``--out`` across spans.
+    import typer.rich_utils as rich_utils
+
+    monkeypatch.setattr(rich_utils, "FORCE_TERMINAL", True)
     result = runner.invoke(cli.app, ["run", "--help"])
     assert result.exit_code == 0
-    assert "--out" in result.stdout
-    assert "--only" in result.stdout
-    assert "--final" in result.stdout
+    help_text = _plain(result.stdout)
+    assert "--out" in help_text
+    assert "--only" in help_text
+    assert "--final" in help_text
 
 
 def test_run_pass_demo_exit_zero(tmp_path: Path) -> None:
