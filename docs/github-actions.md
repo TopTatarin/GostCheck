@@ -12,6 +12,8 @@ Workflow file: [`.github/workflows/normocontrol.yml`](../.github/workflows/normo
 | `publish-report` | no | downloads artifact and upserts one PR comment |
 
 Semantic/LLM jobs are intentionally **not** in this workflow and must never be required checks.
+See [`.github/workflows/semantic-advisory.yml`](../.github/workflows/semantic-advisory.yml),
+[self-hosted-runner.md](self-hosted-runner.md), and [cloud-fallback.md](cloud-fallback.md).
 
 ## Triggers and safety
 

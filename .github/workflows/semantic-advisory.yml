@@ -1,0 +1,236 @@
+name: Semantic Advisory
+
+# Advisory-only LLM backends. Never a required branch-protection check.
+# Self-hosted GPU jobs are workflow_dispatch-only on main (no pull_request).
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend:
+        description: "Override vars.LLM_BACKEND (ollama|yandex|disabled); empty keeps the variable"
+        required: false
+        type: string
+        default: ""
+      allow_cloud_data:
+        description: "Allow sending document text to Yandex (requires semantic-cloud approval)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: semantic-advisory-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  select-backend:
+    name: select-backend
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.pick.outputs.backend }}
+    steps:
+      - name: Resolve LLM_BACKEND
+        id: pick
+        env:
+          INPUT_BACKEND: ${{ inputs.backend }}
+          VAR_BACKEND: ${{ vars.LLM_BACKEND }}
+        run: |
+          set -euo pipefail
+          chosen="${INPUT_BACKEND:-}"
+          if [ -z "${chosen}" ]; then
+            chosen="${VAR_BACKEND:-disabled}"
+          fi
+          chosen="$(printf '%s' "${chosen}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+          case "${chosen}" in
+            ollama|yandex|disabled) ;;
+            *)
+              echo "::error::Unknown LLM_BACKEND='${chosen}' (expected ollama|yandex|disabled)"
+              exit 1
+              ;;
+          esac
+          echo "backend=${chosen}" >> "${GITHUB_OUTPUT}"
+          echo "Selected backend: ${chosen}"
+
+  semantic-ollama:
+    name: semantic-ollama
+    needs: [select-backend]
+    if: >-
+      needs.select-backend.outputs.backend == 'ollama'
+      && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, windows, x64, gpu, normocontrol]
+    environment: local-gpu
+    steps:
+      - name: Checkout trusted main tip
+        uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Guard local-gpu job
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/main"
+          # Local GPU job must not receive cloud API keys via runner environment.
+          if [ -n "${YANDEX_AI_API_KEY:-}" ] || [ -n "${LLM_API_KEY:-}" ]; then
+            echo "::error::Cloud API keys must not be present on semantic-ollama"
+            exit 1
+          fi
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.lock
+            pyproject.toml
+      - name: Install locked dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.lock
+          python -m pip install --no-deps -e .
+      - name: Run Ollama advisory semantic
+        shell: pwsh
+        env:
+          LLM_BACKEND: ollama
+          LLM_PROVIDER: ollama
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/semantic_ci.ps1 `
+            -Provider ollama -Out build/semantic
+      - name: Upload semantic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-report-${{ github.sha }}
+          path: build/semantic/
+          if-no-files-found: warn
+
+  semantic-yandex:
+    name: semantic-yandex
+    needs: [select-backend]
+    if: needs.select-backend.outputs.backend == 'yandex'
+    runs-on: ubuntu-latest
+    environment: semantic-cloud
+    steps:
+      - name: Checkout trusted main tip
+        uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Setup normocontrol
+        uses: ./.github/actions/setup-normocontrol
+      - name: Run Yandex advisory semantic
+        env:
+          LLM_BACKEND: yandex
+          LLM_PROVIDER: yandex
+          YANDEX_AI_API_KEY: ${{ secrets.YANDEX_AI_API_KEY }}
+          LLM_API_KEY: ${{ secrets.YANDEX_AI_API_KEY }}
+          LLM_MODEL: ${{ vars.YANDEX_MODEL }}
+          ALLOW_CLOUD_DATA: ${{ inputs.allow_cloud_data && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "${ALLOW_CLOUD_DATA}" = "true" ]; then
+            extra+=(--allow-cloud-data)
+          fi
+          bash scripts/semantic_ci.sh --provider yandex --out build/semantic "${extra[@]}"
+      - name: Upload semantic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-report-${{ github.sha }}
+          path: build/semantic/
+          if-no-files-found: warn
+
+  semantic-disabled:
+    name: semantic-disabled
+    needs: [select-backend]
+    if: needs.select-backend.outputs.backend == 'disabled'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted main tip
+        uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Setup normocontrol
+        uses: ./.github/actions/setup-normocontrol
+      - name: Publish skipped advisory artifact
+        run: bash scripts/semantic_ci.sh --provider disabled --out build/semantic
+      - name: Upload semantic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-report-${{ github.sha }}
+          path: build/semantic/
+          if-no-files-found: warn
+
+  publish-semantic:
+    name: publish-semantic
+    needs:
+      - select-backend
+      - semantic-ollama
+      - semantic-yandex
+      - semantic-disabled
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Download semantic advisory artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: semantic-report-${{ github.sha }}
+          path: build/semantic-artifact
+      - name: Download formal report artifact (optional)
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: normocontrol-report-${{ github.sha }}
+          path: build/formal-artifact
+      - name: Aggregate advisory status
+        run: |
+          set -euo pipefail
+          mkdir -p build/semantic-publish
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          out = Path("build/semantic-publish/aggregate.json")
+          candidates = [
+              Path("build/semantic-artifact/status.json"),
+              Path("build/semantic/status.json"),
+          ]
+          status_path = next((path for path in candidates if path.is_file()), None)
+          formal = any(Path("build/formal-artifact").rglob("summary.json"))
+          if status_path is None:
+              payload = {
+                  "advisory": True,
+                  "blocks_merge": False,
+                  "provider": "none",
+                  "status": "missing_artifact",
+                  "reason": (
+                      "semantic runner offline or artifact absent; "
+                      "formal merge unaffected"
+                  ),
+                  "process_exit": 0,
+                  "formal_artifact_present": formal,
+              }
+          else:
+              payload = json.loads(status_path.read_text(encoding="utf-8"))
+              payload["advisory"] = True
+              payload["blocks_merge"] = False
+              payload["formal_artifact_present"] = formal
+          out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(payload, ensure_ascii=False))
+          PY
+          echo "Advisory aggregate written; merge is never blocked by this workflow."
+      - name: Upload aggregate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-aggregate-${{ github.sha }}
+          path: build/semantic-publish/
+          if-no-files-found: warn
