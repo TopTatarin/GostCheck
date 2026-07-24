@@ -1,0 +1,10 @@
+# https://github.com/rhysd/actionlint/blob/main/docs/config.md
+self-hosted-runner:
+  labels:
+    - windows
+    - x64
+    - gpu
+    - normocontrol
+
+# null disables vars.* name checks (LLM_BACKEND / YANDEX_MODEL are optional).
+config-variables: null

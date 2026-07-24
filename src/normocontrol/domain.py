@@ -46,6 +46,8 @@ class ExitCode(IntEnum):
     SUCCESS = 0
     RUNTIME_ERROR = 1
     FORMAL_FAILURE = 2
+    CONFIG_ERROR = 3
+    INTERNAL_ERROR = 4
 
 
 class ContractModel(BaseModel):
@@ -126,6 +128,8 @@ class RunReport(ContractModel):
             for stage in self.stages
             for finding in stage.findings
         )
+        if self.exit_code in {ExitCode.CONFIG_ERROR, ExitCode.INTERNAL_ERROR}:
+            return self
         if has_formal_failure and self.exit_code is not ExitCode.FORMAL_FAILURE:
             msg = "formal fail findings require exit_code=2"
             raise ValueError(msg)

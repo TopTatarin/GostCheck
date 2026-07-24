@@ -12,6 +12,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "GostCheck team" }]
 dependencies = [
   "httpx>=0.28,<1",
+  "jinja2>=3.1,<4",
   "jsonschema>=4.23,<5",
   "openai>=1.109,<2",
   "pylatexenc>=2.10,<3",
@@ -41,7 +42,8 @@ normocontrol = "normocontrol.cli:app"
 packages = ["src/normocontrol"]
 
 [tool.pytest.ini_options]
-addopts = "-ra --strict-config --strict-markers -m 'not live'"
+# importlib mode: multiple test_*.py can share a basename (unit vs e2e vs semantic).
+addopts = "-ra --strict-config --strict-markers -m 'not live' --import-mode=importlib"
 testpaths = ["tests"]
 pythonpath = ["src", "."]
 markers = [

@@ -1,0 +1,31 @@
+{
+  "counts": {
+    "approvals_required": 0,
+    "formal_errors": 0,
+    "llm_advisory": 0,
+    "unverifiable": 0,
+    "warnings": 0
+  },
+  "exit_code": 0,
+  "findings": [],
+  "header": {
+    "approvals_required": false,
+    "artifact_name": "normocontrol-report-deadbee",
+    "commit_sha": "deadbeef",
+    "degraded": false,
+    "gate_status": "pass",
+    "generated_at": "2026-07-24T00:00:00Z",
+    "model_id": null,
+    "profile": "software",
+    "rubric_version": "2025.1-draft",
+    "tool_version": "0.1.0"
+  },
+  "schema_version": "1.1",
+  "stages": [
+    {
+      "duration_ms": 0.0,
+      "findings": [],
+      "name": "formal"
+    }
+  ]
+}

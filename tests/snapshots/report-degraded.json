@@ -1,0 +1,63 @@
+{
+  "counts": {
+    "approvals_required": 0,
+    "formal_errors": 0,
+    "llm_advisory": 0,
+    "unverifiable": 1,
+    "warnings": 1
+  },
+  "exit_code": 0,
+  "findings": [
+    {
+      "evidence": [
+        {
+          "locator": "main.tex:3"
+        }
+      ],
+      "fingerprint": "sha256:0ec89eb142b76b5bdced7e35c2f4261e7b4c58af63b4c60f7005d5a5a32db666",
+      "layer": "script",
+      "message": "latexmk недоступен",
+      "path": "main.tex",
+      "recommendation": "Добавьте исходники/артефакты, необходимые для проверки правила.",
+      "rule_id": "SYS-03",
+      "severity": "warn",
+      "status": "unverifiable"
+    }
+  ],
+  "header": {
+    "approvals_required": false,
+    "artifact_name": "normocontrol-report-deadbee",
+    "commit_sha": "deadbeef",
+    "degraded": true,
+    "gate_status": "pass",
+    "generated_at": "2026-07-24T00:00:00Z",
+    "model_id": null,
+    "profile": "software",
+    "rubric_version": "2025.1-draft",
+    "tool_version": "0.1.0"
+  },
+  "schema_version": "1.1",
+  "stages": [
+    {
+      "duration_ms": 0.0,
+      "findings": [
+        {
+          "evidence": [
+            {
+              "description": null,
+              "locator": "main.tex:3"
+            }
+          ],
+          "layer": "script",
+          "message": "latexmk недоступен",
+          "page": null,
+          "path": "main.tex",
+          "rule_id": "SYS-03",
+          "severity": "warn",
+          "status": "unverifiable"
+        }
+      ],
+      "name": "formal"
+    }
+  ]
+}

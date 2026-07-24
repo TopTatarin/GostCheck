@@ -1,0 +1,144 @@
+name: Normocontrol
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: normocontrol-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-unit:
+    name: lint-and-unit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup normocontrol
+        uses: ./.github/actions/setup-normocontrol
+      - name: Ruff
+        run: python -m ruff check .
+      - name: Mypy
+        run: python -m mypy src/normocontrol
+      - name: Pytest
+        run: >
+          python -m pytest -q
+          --cov=normocontrol
+          --cov-report=term-missing
+          --cov-fail-under=85
+
+  build-latex:
+    name: build-latex
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup normocontrol
+        uses: ./.github/actions/setup-normocontrol
+      - name: Best-effort LaTeX build
+        id: latex
+        run: |
+          set -euo pipefail
+          mkdir -p build/latex
+          if command -v latexmk >/dev/null 2>&1; then
+            latexmk -interaction=nonstopmode -halt-on-error \
+              -outdir=build/latex tests/fixtures/demo/pass/main.tex \
+              > build/latex/latexmk.log 2>&1 || true
+            echo '{"status":"attempted","degraded":false}' > build/latex/status.json
+          else
+            echo "latexmk not installed on runner; marking degraded"
+            printf '%s\n' '{"status":"tool_missing","degraded":true}' > build/latex/status.json
+            printf '%s\n' 'latexmk executable not found' > build/latex/latexmk.log
+          fi
+      - name: Upload LaTeX logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: latex-build-${{ github.sha }}
+          path: build/latex/
+          if-no-files-found: warn
+
+  formal-gate:
+    name: formal-gate
+    needs: [lint-and-unit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup normocontrol
+        uses: ./.github/actions/setup-normocontrol
+      - name: Formal gate on pass fixture
+        id: pass
+        run: |
+          set -euo pipefail
+          normocontrol run tests/fixtures/demo/pass --no-llm --out build/pass
+      - name: Self-check fail fixture exits 2
+        run: |
+          set +e
+          normocontrol run tests/fixtures/demo/fail --no-llm --out build/fail
+          code=$?
+          set -e
+          test "$code" -eq 2
+      - name: Upload normocontrol report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: normocontrol-report-${{ github.sha }}
+          path: |
+            build/pass/report.json
+            build/pass/report.md
+            build/pass/summary.json
+            build/pass/run_state.json
+            build/fail/report.json
+            build/fail/report.md
+            build/fail/summary.json
+          if-no-files-found: warn
+
+  publish-report:
+    name: publish-report
+    needs: [formal-gate]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup normocontrol
+        uses: ./.github/actions/setup-normocontrol
+      - name: Download formal report artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: normocontrol-report-${{ github.sha }}
+          path: build/artifact
+      - name: Publish or refresh PR comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: |
+          set -euo pipefail
+          summary=""
+          for candidate in \
+            build/artifact/pass/summary.json \
+            build/artifact/summary.json \
+            build/pass/summary.json
+          do
+            if [ -f "$candidate" ]; then
+              summary="$candidate"
+              break
+            fi
+          done
+          if [ -z "$summary" ]; then
+            echo "summary artifact missing; publishing neutral notice"
+            python scripts/ci_comment.py --missing-artifact --neutral
+          else
+            python scripts/ci_comment.py --summary "$summary"
+          fi

@@ -1,203 +1,106 @@
 # GostCheck
 
-Публичный движок автоматизированного нормоконтроля ВКР через GitHub CI/CD.
+Публичный движок автоматизированного нормоконтроля ВКР через GitHub CI/CD
+(**PoC v0.1.0**).
 
-Проект проверяет LaTeX/PDF и библиографию детерминированными правилами, а LLM
-использует только для консультативных семантических замечаний. Окончательное
-решение принимает нормоконтролёр.
+Детерминированные правила проверяют LaTeX/PDF/библиографию. LLM даёт только
+advisory-замечания. Merge блокирует только formal-gate. Решение о выпуске
+принимает нормоконтролёр.
 
-## Текущее состояние реализации
+## Быстрый старт (≤15 минут)
 
-Сейчас в ветке `feat/timur-core-llm` завершены первые 3 из 18 задач плана.
-Уже работает базовый Python-пакет, CLI, строгие модели результатов, загрузка
-рубрики с явными профилями и безопасное извлечение структуры из LaTeX/PDF.
-
-Последняя подтверждённая проверка текущего кода:
-
-- `ruff` — ошибок нет;
-- `mypy` — ошибок типизации нет в 15 исходных файлах;
-- `pytest` — 76 тестов прошли;
-- покрытие production-пакета — 90,77% при минимальном пороге 85%.
-
-### Уже сделано
-
-- [x] **T-01 — каркас проекта и исполняемые контракты.** Настроены Python 3.12,
-  `pyproject.toml`, `requirements.lock`, пакет `src/normocontrol`, CLI
-  `normocontrol`, команда `doctor`, строгие Pydantic-модели, коды выхода,
-  фильтрация чувствительных данных в логах и базовые тесты.
-- [x] **T-02 — рубрика и профили ВКР.** Реализованы строгая загрузка
-  `rubric.yaml`, JSON Schema, проверка 64 уникальных правил, профили `software`,
-  `research` и `organizational`, наследование локальных конфигураций и защита от
-  циклических `include`.
-- [x] **T-03 — безопасное извлечение документов.** Реализованы обработчики
-  LaTeX/PDF, секционное разбиение, chunks с ограниченным размером, SHA-256
-  locators, защита от выхода за корень проекта, циклических LaTeX-включений,
-  повреждённых и зашифрованных PDF. Добавлена команда `normocontrol extract`.
-- [x] **T-04 — провайдеры моделей.** Добавить общий интерфейс, режим
-  `disabled`, локальный Ollama и облачный fallback с тайм-аутами, повторными
-  попытками, строгими схемами ответа и защитой секретов.
-- [x] **T-05 — семантические advisory-проверки.** Реализованы строгий structured output,
-  секционные batch-запросы, проверка цитат по chunks, однократный schema repair и защита
-  от prompt injection. Результаты не блокируют формальный gate.
-- [x] **T-06 — локальный GPU smoke и benchmark.** Проверить Ollama и выбранную
-  открытую модель на RTX 4070 Super, добавить CPU/fallback-режим, live-тесты и
-  безопасный JSON с метриками производительности.
-### Что ещё предстоит сделать
-
-#### Тимур — завершить ветку `feat/timur-core-llm`
-
-- [ ] Запустить полный набор проверок, отправить последние коммиты, создать Pull
-  Request ветки Тимура и слить его в `main` после успешного review.
-
-#### Доминик — после merge ветки Тимура
-
-- [ ] **D-01 — формальный движок правил и gate.**
-- [ ] **D-02 — структурные и системные проверки LaTeX.**
-- [ ] **D-03 — проверки форматирования и геометрии PDF.**
-- [ ] **D-04 — рисунки, таблицы, формулы, подписи и ссылки.**
-- [ ] **D-05 — библиография и правила review.**
-- [ ] **D-06 — размеченные синтетические fixtures и метрики TP/FP/FN.**
-- [ ] Создать Pull Request Доминика и слить его в `main` после review.
-
-#### Араик — после merge ветки Доминика
-
-- [ ] **A-01 — общий оркестратор и CLI полного прогона.**
-- [ ] **A-02 — стабильные отчёты `report.json` и `report.md`.**
-- [ ] **A-03 — GitHub Actions, артефакты и комментарии в Pull Request.**
-- [ ] **A-04 — необязательный семантический запуск в CI.**
-- [ ] **A-05 — воспроизводимые демонстрационные pass/fail-сценарии.**
-- [ ] **A-06 — документация, безопасность, release-check и приёмка v0.1.0.**
-- [ ] Создать Pull Request Араика, дождаться обязательных проверок и выполнить
-  итоговый merge в `main`.
-
-### Итоговая цель
-
-После выполнения оставшихся задач репозиторий должен принимать синтетическую
-LaTeX/PDF-работу, запускать формальные и необязательные семантические проверки,
-возвращать документированные коды выхода, публиковать JSON/Markdown-отчёт в
-GitHub Actions и блокировать merge только при формальных ошибках. Реальные ВКР
-и персональные данные в репозитории не хранятся.
-
-## Важно о данных
-
-В репозитории разрешены только код, методическая рубрика, документация и
-синтетические тестовые данные. Реальные ВКР, отчёты с цитатами, ФИО студентов,
-ключи API и другие персональные данные коммитить нельзя. Для этого в
-`.gitignore` предусмотрены отдельные запреты.
-
-## Быстрый старт
-
-Требуется Python 3.12.
+Требуется **Python 3.12**.
 
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+py -3.12 -m venv .venv312
+.\.venv312\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -e '.[dev]'
-python -m pytest -q
-normocontrol --version
-normocontrol doctor
-```
-
-Для воспроизводимой установки CI и чистого окружения используйте lock-файл:
-
-```powershell
 python -m pip install -r requirements.lock
 python -m pip install --no-deps -e .
+normocontrol --version
+normocontrol doctor
+python -m pytest -q -m "not live"
 ```
 
-На Linux команды те же, кроме активации окружения (`source .venv/bin/activate`).
-Пути внутри приложения обрабатываются через `pathlib`; JSON-файлы всегда
-записываются в UTF-8, включая пути с пробелами и Unicode/NFD-именами.
+Linux: `python3.12 -m venv .venv312 && source .venv312/bin/activate` — дальше те же
+команды. Подробнее: [docs/setup-windows.md](docs/setup-windows.md),
+[docs/setup-linux.md](docs/setup-linux.md).
 
-Без локальной или облачной модели используйте `LLM_PROVIDER=disabled`. Для
-локального запуска через Ollama скопируйте `.env.example` в `.env` и установите
-`LLM_PROVIDER=ollama`. Файл `.env` не отслеживается Git.
-
-Семантический этап принимает только готовый `DocumentBundle` и всегда возвращает advisory JSON
-с кодом процесса 0, в том числе при отключённом или недоступном LLM. В audit-части сохраняются
-только SHA-256 промпта, идентификатор модели и оценка token usage; исходный текст туда не входит.
+## Полный прогон и демо
 
 ```powershell
-normocontrol semantic build/document-bundle.json --provider disabled
+# Pass → exit 0
+normocontrol run tests/fixtures/demo/pass --provider disabled --out build/demo-pass
+
+# Fail (STR-01) → exit 2
+normocontrol run tests/fixtures/demo/fail --provider disabled --out build/demo-fail
+
+# Локальный demo dry-run (без gh/git мутаций)
+powershell -ExecutionPolicy Bypass -File demo/run_demo.ps1 -Mode dry-run
 ```
 
-Реализованы правила `ANN-01`, `INT-01`, `TSK-01`, `TSK-03`, `CON-01` и `GEN-01`.
-Остальные semantic-правила явно помечаются `not_implemented`/`not_applicable` до фазы расширения.
+См. [demo/README.md](demo/README.md).
 
-`normocontrol doctor` выполняет только локальные проверки Python 3.12, Git,
-`latexmk`, `chktex`, Ollama и конфигурации LLM. Команда не обращается к сети и
-всегда завершается кодом 0: отсутствующие внешние инструменты показываются как
-диагностика, а не как сбой.
+## Provider flags
 
-## Исполняемые контракты
+| Способ | Пример |
+|--------|--------|
+| Env | `LLM_PROVIDER=disabled\|ollama\|yandex` |
+| CLI | `normocontrol run … --provider disabled` |
+| Global | `normocontrol --no-llm run …` |
+| Cloud opt-in | `ALLOW_CLOUD_DATA=true` + `LLM_API_KEY` (только Yandex) |
 
-Публичные Pydantic v2-модели находятся в `normocontrol.domain`:
-`RuleDefinition`, `Evidence`, `Finding`, `StageResult` и `RunReport`. Все модели
-запрещают неизвестные поля. Идентификатор правила и locator evidence не могут
-быть пустыми, а длительность этапа не может быть отрицательной. JSON-контракт
-`RunReport` не добавляет текущий timestamp, поэтому одинаковый результат имеет
-стабильную сериализацию.
+Ключи API только через окружение / GitHub Secrets — не в CLI и не в git.
+Документация: [docs/llm-providers.md](docs/llm-providers.md),
+[docs/privacy.md](docs/privacy.md).
 
-Статусы результата: `pass`, `fail`, `warn`, `info`, `not_applicable`,
-`unverifiable`, `skipped`. Слои `llm` и `vision` не могут создать `fail`; этот
-инвариант проверяет сама доменная модель. Формальные слои `class`, `script` и
-`class+script` могут вернуть `fail` и код процесса 2.
+## Коды выхода (`normocontrol run`)
 
-Коды выхода:
+| Код | Значение |
+|----:|----------|
+| 0 | Успех или только advisory (warn/info/unverifiable/skipped) |
+| 2 | Formal gate fail (блокирующие formal error+fail) |
+| 3 | Ошибка конфигурации/входа |
+| 4 | Внутренняя/инструментальная ошибка при `--fail-closed` |
 
-- `0` — успешное выполнение, включая `--help`, `--version` и `doctor`;
-- `1` — ошибка выполнения;
-- `2` — найдены блокирующие нарушения формальных правил.
+LLM/vision **никогда** не возвращают `fail` и не блокируют merge.
 
-Обычные логи направляются в stderr. Фильтр удаляет API-ключи, токены и случайно
-переданный текст ВКР, а также ограничивает длину сообщения. JSON-отчёт пишется
-отдельно в stdout либо в UTF-8 файл, поэтому его можно безопасно передать
-следующему шагу CI.
+## Архитектура (кратко)
 
-## Проверки разработки
+```text
+build → formal → semantic(advisory) → aggregate(report.json / report.md)
+```
 
-### Проверка рубрики и профили
+- Formal rules → могут блокировать (exit 2).
+- Semantic/LLM → только advisory artifact / PR comment.
+- CI: required `lint-and-unit` + `formal-gate`; semantic workflow — optional.
 
-`work_profile` задаётся пользователем явно и принимает одно из значений `software`,
-`research` или `organizational`. Значения `auto` нет: рекомендация LLM может быть только
-предупреждением и не меняет профиль или gate. Параметры draft-рубрики разворачиваются только
-после перечисления в `approved_params`; для остальных выводится `APPROVAL_REQUIRED`.
+Подробнее: [docs/architecture.md](docs/architecture.md),
+[docs/github-actions.md](docs/github-actions.md),
+[docs/data-flow.md](docs/data-flow.md).
+
+## Границы автоматизации
+
+**Делает:** формальный gate, отчёты, PR-comment, advisory semantic (opt-in).  
+**Не делает:** авто-merge без человека, хранение реальных ВКР в git, «оценку»
+исторических работ по draft-рубрике 2026 как юридический вердикт.
+
+## Документация
+
+| Документ | Тема |
+|----------|------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Ветки, PR, review |
+| [SECURITY.md](SECURITY.md) | Угрозы, секреты, runner |
+| [CHANGELOG.md](CHANGELOG.md) | История релизов |
+| [docs/acceptance.md](docs/acceptance.md) | Чеклист v0.1.0 + tag |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Симптомы → действия |
+| [docs/privacy.md](docs/privacy.md) | Персональные данные |
+
+## Release check
 
 ```powershell
-normocontrol rubric validate --rubric rubric.yaml --config normocontrol.yaml.example
+python scripts/release_check.py --out build/release-check.json
 ```
-
-Команда возвращает `0` для валидной рубрики и `3` для ошибки формата/конфигурации. Диагностика
-содержит файл и YAML path. Конфигурации могут наследовать локальные YAML-файлы через `include`
-(строка или список путей относительно включающего файла); циклические include запрещены.
-
-```powershell
-python -m ruff format --check .
-python -m ruff check .
-python -m mypy src
-python -m pytest -q --cov=normocontrol --cov-fail-under=85
-```
-
-Покрытие измеряется только для production-пакета `normocontrol`, минимальный
-порог — 85%. Тесты с внешними сервисами обязаны иметь marker `live`; по
-умолчанию они исключены. Unit-тесты не выполняют сетевых запросов.
-
-## Работа через ветки
-
-```powershell
-git switch main
-git pull --ff-only
-git switch -c feat/<короткое-имя-задачи>
-# изменения и тесты
-git add -p
-git commit -m "feat(scope): краткое описание"
-git push -u origin HEAD
-gh pr create --fill
-```
-
-Не отправляйте изменения напрямую в `main`: каждая задача проходит pull request
-и review другого участника.
 
 ## Ответственность
 

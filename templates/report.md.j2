@@ -1,0 +1,68 @@
+{{ marker }}
+## NORMACTRL: {{ header.gate_status | upper }}
+
+| Category | Count |
+|---|---:|
+| Formal errors | {{ counts.formal_errors }} |
+| Warnings | {{ counts.warnings }} |
+| LLM advisory | {{ counts.llm_advisory }} |
+| Unverifiable | {{ counts.unverifiable }} |
+| Approvals required | {{ counts.approvals_required }} |
+
+- Tool: `{{ header.tool_version }}`
+- Profile: `{{ header.profile or "n/a" }}`
+- Rubric: `{{ header.rubric_version or "n/a" }}`
+- Model: `{{ header.model_id or "disabled" }}`
+- Commit: `{{ header.commit_sha }}`
+- Degraded: `{{ header.degraded }}`
+- Approvals required: `{{ header.approvals_required }}`
+- Exit code: `{{ exit_code }}`
+{% if header.artifact_name %}
+- Artifact: `{{ header.artifact_name }}`
+{% endif %}
+
+{% macro render_group(title, items) -%}
+### {{ title }}
+{% if not items %}
+_None._
+{% elif items|length > collapse_after %}
+<details>
+<summary>{{ items|length }} items (click to expand)</summary>
+
+{% for item in items %}
+- **{{ item.rule_id }}** [{{ item.severity }}/{{ item.status }}]: {{ item.message }}
+  - fingerprint: `{{ item.fingerprint }}`
+  - recommendation: {{ item.recommendation }}
+  {%- if item.confidence is defined and item.confidence is not none %}
+  - confidence: {{ item.confidence }} _(not probability of truth)_
+  {%- endif %}
+  {%- for ev in item.evidence or [] %}
+  - evidence: `{{ ev.locator }}`{% if ev.quote %} — {{ ev.quote }}{% endif %}
+  {%- endfor %}
+{% endfor %}
+
+</details>
+{% else %}
+{% for item in items %}
+- **{{ item.rule_id }}** [{{ item.severity }}/{{ item.status }}]: {{ item.message }}
+  - fingerprint: `{{ item.fingerprint }}`
+  - recommendation: {{ item.recommendation }}
+  {%- if item.confidence is defined and item.confidence is not none %}
+  - confidence: {{ item.confidence }} _(not probability of truth)_
+  {%- endif %}
+  {%- for ev in item.evidence or [] %}
+  - evidence: `{{ ev.locator }}`{% if ev.quote %} — {{ ev.quote }}{% endif %}
+  {%- endfor %}
+{% endfor %}
+{% endif %}
+{%- endmacro %}
+
+{{ render_group("Formal errors", groups.formal_errors) }}
+
+{{ render_group("Warnings", groups.warnings) }}
+
+{{ render_group("Advisory LLM", groups.llm_advisory) }}
+
+{{ render_group("Unverifiable", groups.unverifiable) }}
+
+{{ render_group("Approvals required", groups.approvals_required) }}

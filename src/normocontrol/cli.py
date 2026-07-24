@@ -16,6 +16,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich.console import Console
 from rich.table import Table
 
+from normocontrol.cache import LockError
 from normocontrol.domain import ExitCode, RunReport, StageResult
 from normocontrol.errors import ConfigurationError, LocatedValidationError
 from normocontrol.extract.base import DocumentBundle, ExtractionError
@@ -26,12 +27,14 @@ from normocontrol.llm.config import ProviderName, load_llm_config
 from normocontrol.llm.disabled import DisabledProvider
 from normocontrol.llm.ollama import OllamaProvider
 from normocontrol.llm.yandex import YandexProvider
+from normocontrol.orchestrator import run_pipeline
 from normocontrol.rubric.expansion import expand_rubric
 from normocontrol.rubric.loader import load_config, load_effective_rubric, load_rubric
 from normocontrol.rubric.models import EffectiveRubric, NormocontrolConfig, WorkProfile
 from normocontrol.rules.context import ExecutionContext, LatexProject
 from normocontrol.rules.engine import FormalEngine
 from normocontrol.rules.register import default_formal_registry
+from normocontrol.run_context import RunRequest, parse_only
 from normocontrol.semantic.engine import SemanticEngine
 
 app = typer.Typer(no_args_is_help=True, help="Автоматизированный нормоконтроль ВКР.")
@@ -308,6 +311,86 @@ def semantic_command(
     model_id = config.model or selected.name
     report = SemanticEngine(selected, model_id=model_id).run(bundle)
     sys.stdout.write(f"{report.model_dump_json(indent=2)}\n")
+
+
+@app.command("run")
+def run_command(
+    ctx: typer.Context,
+    source: Annotated[
+        Path,
+        typer.Argument(help="Каталог с main.tex/main.pdf либо путь к .tex/.pdf."),
+    ],
+    config: Annotated[Path, typer.Option("--config", help="Путь к конфигурации.")] = Path(
+        "normocontrol.yaml.example"
+    ),
+    rubric: Annotated[Path, typer.Option("--rubric", help="Путь к rubric.yaml.")] = Path(
+        "rubric.yaml"
+    ),
+    out: Annotated[Path, typer.Option("--out", help="Каталог артефактов прогона.")] = Path(
+        "build/normocontrol"
+    ),
+    profile: Annotated[
+        str | None,
+        typer.Option("--profile", help="software, research или organizational."),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", help="disabled, ollama или yandex; CLI имеет приоритет."),
+    ] = None,
+    only: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--only",
+            help="Стадия (build/formal/semantic/aggregate) или префикс правила.",
+        ),
+    ] = None,
+    no_llm: Annotated[
+        bool,
+        typer.Option("--no-llm", help="Отключить semantic LLM для этого прогона."),
+    ] = False,
+    final: Annotated[
+        bool,
+        typer.Option("--final", help="Применить severity_final (например ANN-03/REV-01)."),
+    ] = False,
+    fail_closed: Annotated[
+        bool,
+        typer.Option("--fail-closed", help="Инструментальные сбои formal/build дают exit 4."),
+    ] = False,
+) -> None:
+    """Run build -> formal -> semantic -> aggregate with documented exit codes."""
+    state = ctx.find_root().obj
+    global_no_llm = isinstance(state, CliState) and state.no_llm
+    try:
+        only_filter = parse_only(tuple(only) if only else None)
+        request = RunRequest(
+            source=source,
+            out_dir=out,
+            config_path=config,
+            rubric_path=rubric,
+            profile=profile,
+            no_llm=global_no_llm or no_llm,
+            provider=provider,
+            only=only_filter,
+            apply_final_severity=final,
+            fail_closed=fail_closed,
+            tool_version=package_version(),
+        )
+        report = run_pipeline(request)
+    except ConfigurationError as error:
+        typer.echo(f"ERROR {error}", err=True)
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
+    except LocatedValidationError as error:
+        typer.echo(f"ERROR {error}", err=True)
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
+    except LockError as error:
+        typer.echo(f"ERROR {error}", err=True)
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
+    except Exception as error:
+        typer.echo(f"ERROR internal failure: {type(error).__name__}", err=True)
+        raise typer.Exit(code=int(ExitCode.INTERNAL_ERROR)) from error
+
+    # Published artifacts are written by the orchestrator aggregate stage.
+    raise typer.Exit(code=int(report.exit_code))
 
 
 @app.command("check")

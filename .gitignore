@@ -7,7 +7,7 @@
 *.p12
 *.pfx
 secrets/
-private/
+/private/
 config/local/
 normocontrol.yaml
 rubric.local.yaml
@@ -18,6 +18,9 @@ datasets/private/
 submissions/
 theses/
 student-work/
+samples/private/*
+!samples/private/.gitkeep
+!samples/private/.gitignore
 reports/
 artifacts/
 *.pdf
@@ -33,8 +36,10 @@ artifacts/
 
 # Python environments and generated packages
 .venv/
+.venv312/
 venv/
 env/
+.tools/
 __pycache__/
 *.py[cod]
 *$py.class

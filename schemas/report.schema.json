@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gostcheck.local/schemas/report.schema.json",
+  "title": "GostCheck published normocontrol report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "header", "exit_code", "counts", "findings", "stages"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0", "1.1"]
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit_sha",
+        "tool_version",
+        "gate_status",
+        "degraded",
+        "approvals_required",
+        "generated_at"
+      ],
+      "properties": {
+        "commit_sha": {"type": "string", "minLength": 1},
+        "profile": {"type": ["string", "null"]},
+        "rubric_version": {"type": ["string", "null"]},
+        "model_id": {"type": ["string", "null"]},
+        "tool_version": {"type": "string", "minLength": 1},
+        "gate_status": {"type": "string", "enum": ["pass", "fail", "error"]},
+        "degraded": {"type": "boolean"},
+        "approvals_required": {"type": "boolean"},
+        "generated_at": {"type": "string", "minLength": 1},
+        "artifact_name": {"type": ["string", "null"]}
+      }
+    },
+    "exit_code": {"type": "integer", "enum": [0, 1, 2, 3, 4]},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formal_errors",
+        "warnings",
+        "llm_advisory",
+        "unverifiable",
+        "approvals_required"
+      ],
+      "properties": {
+        "formal_errors": {"type": "integer", "minimum": 0},
+        "warnings": {"type": "integer", "minimum": 0},
+        "llm_advisory": {"type": "integer", "minimum": 0},
+        "unverifiable": {"type": "integer", "minimum": 0},
+        "approvals_required": {"type": "integer", "minimum": 0}
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule_id",
+          "layer",
+          "severity",
+          "status",
+          "message",
+          "fingerprint",
+          "recommendation"
+        ],
+        "properties": {
+          "rule_id": {"type": "string", "minLength": 1},
+          "layer": {
+            "type": "string",
+            "enum": ["class", "script", "class+script", "llm", "vision"]
+          },
+          "severity": {"type": "string", "enum": ["error", "warn", "info"]},
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "warn",
+              "info",
+              "not_applicable",
+              "unverifiable",
+              "skipped"
+            ]
+          },
+          "message": {"type": "string", "minLength": 1},
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["locator"],
+              "properties": {
+                "locator": {"type": "string", "minLength": 1},
+                "description": {"type": ["string", "null"]},
+                "quote": {"type": ["string", "null"]}
+              }
+            }
+          },
+          "path": {"type": ["string", "null"]},
+          "page": {"type": ["integer", "null"], "minimum": 1},
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "recommendation": {"type": "string", "minLength": 1},
+          "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "confidence_note": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "findings", "duration_ms"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "findings": {"type": "array"},
+          "duration_ms": {"type": "number", "minimum": 0}
+        }
+      }
+    }
+  }
+}
