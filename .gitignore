@@ -33,8 +33,10 @@ artifacts/
 
 # Python environments and generated packages
 .venv/
+.venv312/
 venv/
 env/
+.tools/
 __pycache__/
 *.py[cod]
 *$py.class
