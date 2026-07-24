@@ -7,7 +7,7 @@
 *.p12
 *.pfx
 secrets/
-private/
+/private/
 config/local/
 normocontrol.yaml
 rubric.local.yaml
@@ -18,7 +18,7 @@ datasets/private/
 submissions/
 theses/
 student-work/
-samples/private/**
+samples/private/*
 !samples/private/.gitkeep
 !samples/private/.gitignore
 reports/

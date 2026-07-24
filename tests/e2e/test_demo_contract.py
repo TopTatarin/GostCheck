@@ -68,13 +68,14 @@ def test_private_sample_missing_is_skip(tmp_path: Path) -> None:
     )
     assert any(line.startswith("SKIP software") for line in notes)
     assert any("not provided" in line or "SKIP" in line for line in notes)
-    # Nothing under samples/private should appear as a new tracked path from this run.
     private = ROOT / "samples" / "private"
-    assert (private / ".gitkeep").is_file()
+    assert private.is_dir()
     assert (private / ".gitignore").is_file()
     ignored = (private / ".gitignore").read_text(encoding="utf-8")
     assert "*" in ignored
     assert "!.gitkeep" in ignored
+    # Directory marker must be tracked so the folder exists in a fresh clone.
+    assert (private / ".gitkeep").is_file()
 
 
 def test_software_research_conditional_prefixes() -> None:

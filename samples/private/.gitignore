@@ -1,0 +1,4 @@
+# Keep directory; ignore private thesis files (never commit student PDFs).
+*
+!.gitignore
+!.gitkeep

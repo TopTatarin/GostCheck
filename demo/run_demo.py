@@ -46,14 +46,42 @@ def default_runner(cmd: Sequence[str]) -> subprocess.CompletedProcess[str]:
 
 
 def find_normocontrol() -> list[str]:
-    """Prefer installed console script, then ``python -m`` fallback via module path."""
-    scripts = Path(sys.executable).with_name("normocontrol.exe")
-    if scripts.is_file():
-        return [str(scripts)]
-    unix = Path(sys.executable).with_name("normocontrol")
-    if unix.is_file():
-        return [str(unix)]
-    return [sys.executable, str(ROOT / "src" / "normocontrol" / "cli.py")]
+    """Resolve the ``normocontrol`` CLI without executing ``cli.py`` as a script.
+
+    Running ``src/normocontrol/cli.py`` directly puts that package dir on
+    ``sys.path`` and shadows the stdlib ``logging`` module. Prefer the venv
+    console script, then PATH, then ``python -c`` with ``PYTHONPATH=src``.
+    """
+    candidates = [
+        ROOT / ".venv312" / "Scripts" / "normocontrol.exe",
+        ROOT / ".venv312" / "bin" / "normocontrol",
+        Path(sys.executable).with_name("normocontrol.exe"),
+        Path(sys.executable).with_name("normocontrol"),
+    ]
+    for path in candidates:
+        if path.is_file():
+            return [str(path)]
+    which = shutil.which("normocontrol")
+    if which:
+        return [which]
+    # Fallback: import the installed/src package correctly (not as a script file).
+    bootstrap = (
+        "import sys; "
+        "from normocontrol.cli import app; "
+        "sys.argv = ['normocontrol'] + sys.argv[1:]; "
+        "raise SystemExit(app())"
+    )
+    return [sys.executable, "-c", bootstrap]
+
+
+def _normocontrol_env(extra_env: dict[str, str] | None = None) -> dict[str, str]:
+    env = os.environ.copy()
+    src = str(ROOT / "src")
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = src if not existing else src + os.pathsep + existing
+    if extra_env:
+        env.update(extra_env)
+    return env
 
 
 def run_normocontrol(
@@ -65,7 +93,6 @@ def run_normocontrol(
     runner: CommandRunner | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> int:
-    run = runner or default_runner
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         *find_normocontrol(),
@@ -82,9 +109,8 @@ def run_normocontrol(
     ]
     if profile:
         cmd.extend(["--profile", profile])
-    env = os.environ.copy()
-    if extra_env:
-        env.update(extra_env)
+    env = _normocontrol_env(extra_env)
+    if runner is None:
         completed = subprocess.run(
             cmd,
             check=False,
@@ -93,8 +119,10 @@ def run_normocontrol(
             capture_output=True,
             env=env,
         )
+        if completed.returncode not in {0, 2} and (completed.stderr or completed.stdout):
+            sys.stderr.write(completed.stderr or completed.stdout or "")
         return int(completed.returncode)
-    completed = run(cmd)
+    completed = runner(cmd)
     return int(completed.returncode)
 
 

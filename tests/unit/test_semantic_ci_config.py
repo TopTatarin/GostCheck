@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -198,25 +199,42 @@ def test_checkout_uses_trusted_main_not_input_sha() -> None:
     assert "github.event.inputs.sha" not in text
 
 
-def test_ps1_disabled_invocation(tmp_path: Path) -> None:
-    out = tmp_path / "ps1-out"
-    completed = subprocess.run(
-        [
-            "powershell",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(ROOT / "scripts" / "semantic_ci.ps1"),
-            "-Provider",
-            "disabled",
-            "-Out",
-            str(out),
-        ],
-        check=False,
-        cwd=str(ROOT),
-        capture_output=True,
-        text=True,
-    )
+def test_disabled_invocation_via_wrapper(tmp_path: Path) -> None:
+    """Exercise the cross-platform Python entrypoint; PS1 only when available."""
+    out = tmp_path / "wrapper-out"
+    if shutil.which("powershell"):
+        completed = subprocess.run(
+            [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(ROOT / "scripts" / "semantic_ci.ps1"),
+                "-Provider",
+                "disabled",
+                "-Out",
+                str(out),
+            ],
+            check=False,
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+    else:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "semantic_ci.py"),
+                "--provider",
+                "disabled",
+                "--out",
+                str(out),
+            ],
+            check=False,
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     payload = json.loads((out / "status.json").read_text(encoding="utf-8"))
     assert payload["status"] == "skipped"
