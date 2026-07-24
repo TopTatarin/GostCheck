@@ -389,7 +389,7 @@ def run_command(
         typer.echo(f"ERROR internal failure: {type(error).__name__}", err=True)
         raise typer.Exit(code=int(ExitCode.INTERNAL_ERROR)) from error
 
-    emit_report(report, out / "report.json")
+    # Published artifacts are written by the orchestrator aggregate stage.
     raise typer.Exit(code=int(report.exit_code))
 
 

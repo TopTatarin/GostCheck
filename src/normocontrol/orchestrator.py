@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import signal
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,8 @@ from normocontrol.llm.config import ProviderName, load_llm_config
 from normocontrol.llm.disabled import DisabledProvider
 from normocontrol.llm.ollama import OllamaProvider
 from normocontrol.llm.yandex import YandexProvider
+from normocontrol.reporting.aggregate import publish_reports
+from normocontrol.reporting.json_report import ReportMeta
 from normocontrol.rubric.expansion import expand_rubric
 from normocontrol.rubric.loader import load_config, load_rubric
 from normocontrol.rubric.models import EffectiveRubric, NormocontrolConfig, WorkProfile
@@ -186,11 +190,6 @@ class Orchestrator:
                 return self._canceled_report(request, stages, state)
 
             exit_code = self._resolve_exit_code(formal_findings, state)
-            report = RunReport(
-                tool_version=request.tool_version,
-                exit_code=exit_code,
-                stages=tuple(stages),
-            )
             if request.only.includes_stage(StageName.AGGREGATE):
                 started = self._hooks.clock()
                 aggregate = StageResult(
@@ -204,18 +203,53 @@ class Orchestrator:
                     exit_code=exit_code,
                     stages=tuple(stages),
                 )
+                all_findings = tuple(
+                    finding for stage in stages for finding in stage.findings
+                )
+                publish_reports(
+                    report,
+                    request.out_dir,
+                    meta=ReportMeta(
+                        commit_sha=(
+                            os.environ.get("GITHUB_SHA")
+                            or os.environ.get("COMMIT_SHA")
+                            or "unknown"
+                        ),
+                        profile=config.work_profile.value,
+                        rubric_version=rubric.meta.version,
+                        model_id=(
+                            None
+                            if request.no_llm
+                            else (request.provider or "disabled")
+                        ),
+                        degraded=bool(build_meta.get("degraded")),
+                        approvals_required=any(
+                            "APPROVAL_REQUIRED" in finding.message.upper()
+                            for finding in all_findings
+                        ),
+                        artifact_name=None,
+                        repo_root=None,
+                    ),
+                    clock=lambda: datetime(2026, 7, 24, tzinfo=UTC),
+                )
                 self._write_stage_artifact(
                     request.out_dir,
                     StageName.AGGREGATE,
                     aggregate,
-                    {"exit_code": int(exit_code)},
+                    {"exit_code": int(exit_code), "published": True},
                 )
                 state.mark_completed(StageName.AGGREGATE)
+            else:
+                report = RunReport(
+                    tool_version=request.tool_version,
+                    exit_code=exit_code,
+                    stages=tuple(stages),
+                )
+                atomic_write_json(
+                    request.out_dir / "report.json",
+                    json.loads(report.model_dump_json()),
+                )
 
-            atomic_write_json(
-                request.out_dir / "report.json",
-                json.loads(report.model_dump_json()),
-            )
             atomic_write_json(
                 request.out_dir / "run_state.json",
                 {

@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 import normocontrol.cli as cli
-from normocontrol.domain import ExitCode, RunReport
+from normocontrol.domain import ExitCode
 from normocontrol.orchestrator import OrchestratorHooks, run_pipeline
+from normocontrol.reporting.json_report import load_report_schema, validate_published_report
 from normocontrol.tools.latexmk import LatexBuildResult, LatexBuildService, LatexBuildStatus
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,8 +67,12 @@ def test_run_pass_demo_exit_zero(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == int(ExitCode.SUCCESS), result.stdout + result.stderr
-    report = RunReport.model_validate_json((out / "report.json").read_text(encoding="utf-8"))
-    assert report.exit_code is ExitCode.SUCCESS
+    published = json.loads((out / "report.json").read_text(encoding="utf-8"))
+    validate_published_report(published, schema=load_report_schema())
+    assert published["exit_code"] == 0
+    assert published["header"]["gate_status"] == "pass"
+    assert (out / "report.md").is_file()
+    assert (out / "summary.json").is_file()
 
 
 def test_run_fail_demo_exit_two(tmp_path: Path) -> None:

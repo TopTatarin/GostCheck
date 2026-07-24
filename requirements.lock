@@ -49,6 +49,8 @@ idna==3.18
     #   httpx
 iniconfig==2.3.0
     # via pytest
+jinja2==3.1.6
+    # via gostcheck (pyproject.toml)
 jiter==0.16.0
     # via openai
 jsonschema==4.26.0
@@ -59,6 +61,8 @@ librt==0.13.0
     # via mypy
 markdown-it-py==4.2.0
     # via rich
+markupsafe==3.0.3
+    # via jinja2
 mdurl==0.1.2
     # via markdown-it-py
 mypy==1.20.2

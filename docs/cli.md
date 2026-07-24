@@ -50,12 +50,16 @@ LLM/vision **никогда** не переводят прогон в код `2`
 
 ```text
 out/
-  report.json
+  report.json            # published schema v1.1 (header/counts/findings)
+  report.md              # Markdown с marker <!-- normocontrol-report -->
+  summary.json           # GitHub-friendly summary + counts/gate
   run_state.json
   stages/{build,formal,semantic,aggregate}.json
   cache/...
   canceled.json          # только при Ctrl+C
 ```
+
+`report.json` всегда публикуется, в том числе при formal fail. Рендерер **не** меняет gate.
 
 Запись стадий атомарна. Повторный запуск с тем же входом использует cache hit; смена rubric/config/tool/model инвалидирует ключ. LLM-cache изолирован по `model_hash`.
 

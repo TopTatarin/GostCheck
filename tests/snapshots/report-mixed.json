@@ -1,0 +1,93 @@
+{
+  "counts": {
+    "approvals_required": 0,
+    "formal_errors": 1,
+    "llm_advisory": 1,
+    "unverifiable": 0,
+    "warnings": 0
+  },
+  "exit_code": 2,
+  "findings": [
+    {
+      "evidence": [
+        {
+          "locator": "main.tex:3"
+        }
+      ],
+      "fingerprint": "sha256:2f8d33af174a3ba7d71e2dc46288995ffe3a3a5a4ebb81286848027ca53b0de9",
+      "layer": "script",
+      "message": "Нарушен порядок разделов",
+      "path": "main.tex",
+      "recommendation": "Исправьте нарушение и повторите formal-gate.",
+      "rule_id": "STR-01",
+      "severity": "error",
+      "status": "fail"
+    },
+    {
+      "evidence": [
+        {
+          "locator": "main.tex:3"
+        }
+      ],
+      "fingerprint": "sha256:a7f8db6765f43470d81d9c05e7103590fe70e3871815c86933cee900487d24f2",
+      "layer": "llm",
+      "message": "Слабая аннотация",
+      "path": "main.tex",
+      "recommendation": "Проверьте замечание перед финальной сдачей.",
+      "rule_id": "ANN-01",
+      "severity": "warn",
+      "status": "warn"
+    }
+  ],
+  "header": {
+    "approvals_required": false,
+    "artifact_name": "normocontrol-report-deadbee",
+    "commit_sha": "deadbeef",
+    "degraded": false,
+    "gate_status": "fail",
+    "generated_at": "2026-07-24T00:00:00Z",
+    "model_id": null,
+    "profile": "software",
+    "rubric_version": "2025.1-draft",
+    "tool_version": "0.1.0"
+  },
+  "schema_version": "1.1",
+  "stages": [
+    {
+      "duration_ms": 0.0,
+      "findings": [
+        {
+          "evidence": [
+            {
+              "description": null,
+              "locator": "main.tex:3"
+            }
+          ],
+          "layer": "script",
+          "message": "Нарушен порядок разделов",
+          "page": null,
+          "path": "main.tex",
+          "rule_id": "STR-01",
+          "severity": "error",
+          "status": "fail"
+        },
+        {
+          "evidence": [
+            {
+              "description": null,
+              "locator": "main.tex:3"
+            }
+          ],
+          "layer": "llm",
+          "message": "Слабая аннотация",
+          "page": null,
+          "path": "main.tex",
+          "rule_id": "ANN-01",
+          "severity": "warn",
+          "status": "warn"
+        }
+      ],
+      "name": "formal"
+    }
+  ]
+}
