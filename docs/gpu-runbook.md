@@ -10,6 +10,7 @@
 - рекомендуемый `num_ctx=8192`;
 - `max_concurrency=1`;
 - `max_output_tokens=512`;
+- timeout production-запроса `60` секунд, benchmark/live-smoke — `180` секунд;
 - один warming pass перед измеряемым запросом;
 - не более одного измеряемого запроса одновременно.
 
@@ -32,8 +33,10 @@ schema-запроса на русском. Отсутствие `nvidia-smi` д�
 `100% CPU`, результат нельзя записывать как GPU baseline. Частичная загрузка отображается как
 `mixed` с долями CPU/GPU.
 
-Benchmark обращается к tray daemon через `http://127.0.0.1:11434`: явный IPv4 loopback обходит
-конфигурации Windows, где `localhost` разрешается в IPv6, а Ollama слушает только IPv4.
+Production и benchmark используют один default
+`http://127.0.0.1:11434/v1`: явный IPv4 loopback обходит конфигурации Windows, где
+`localhost` разрешается в IPv6. Для native schema-запроса `/v1` детерминированно
+сопоставляется с `/api/chat`.
 
 Обычный benchmark делает warming pass и затем измеряемый запрос. Время измеряется монотонными
 часами. JSON атомарно записывается в `benchmark-results/last.json`, а при Ctrl+C незавершённый
@@ -41,6 +44,17 @@ Benchmark обращается к tray daemon через `http://127.0.0.1:11434
 SHA-256 промпта, токены, latency, tokens/sec и результат проверки схемы. Текст fixture, ответ
 модели и API-ключ в неё не попадают. Если провайдер не вернул usage, поля токенов и tokens/sec
 имеют значение `null`.
+
+### Подтверждённый live-smoke профиля 12 ГБ
+
+25 июля 2026 года synthetic fixture был проверен на Ollama 0.32.3 и RTX 4070 SUPER
+(12 282 MiB VRAM), `qwen3:8b-q4_K_M`, digest
+`500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41`.
+`ollama ps` подтвердил `100% GPU`, context 8192 и размер загруженного процесса 6.3 GB.
+После warmup 9.05 с измеряемый ответ занял 1.23 с: 89 input и 80 output tokens,
+65.2 tokens/s. Ответ прошёл Pydantic schema; после проверки выполнен
+`ollama stop qwen3:8b-q4_K_M`. Это подтверждает default 8192/512 для этой 12 ГБ
+конфигурации, но не гарантирует такой же запас при параллельной GPU-нагрузке.
 
 Для привязки результата к конкретным весам можно передать полный digest из `ollama list`:
 
@@ -98,5 +112,7 @@ $env:RUN_LLM_LIVE = "1"
 python -m pytest -q -m live tests/live/test_ollama_qwen3.py
 ```
 
-Если daemon или модель отсутствуют, live-тест делает `skip`, а не `fail`. Unit-тесты не делают
-сетевых запросов и используют `httpx.MockTransport`.
+Если daemon или модель отсутствуют, live-тест делает `skip`, а не `fail`. При выполненном
+smoke тест требует GPU/mixed placement из `ollama ps`, полный model digest и Pydantic-valid
+response. В `finally` модель выгружается командой `ollama stop`. Unit-тесты не делают сетевых
+запросов и используют `httpx.MockTransport`.

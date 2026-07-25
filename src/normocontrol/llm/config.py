@@ -11,8 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 from normocontrol.errors import ConfigurationError
 
-OLLAMA_BASE_URL = "http://localhost:11434/v1"
+OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1"
 OLLAMA_MODEL = "qwen3:8b-q4_K_M"
+OLLAMA_NUM_CTX = 8192
+OLLAMA_MAX_OUTPUT_TOKENS = 512
 YANDEX_BASE_URL = "https://ai.api.cloud.yandex.net/v1"
 
 
@@ -35,6 +37,8 @@ class LlmConfig(BaseModel):
     api_key: SecretStr = SecretStr("")
     timeout: float = Field(default=60.0, gt=0)
     max_concurrency: int = Field(default=1, ge=1)
+    num_ctx: int = Field(default=OLLAMA_NUM_CTX, ge=512, le=131_072)
+    max_output_tokens: int = Field(default=OLLAMA_MAX_OUTPUT_TOKENS, ge=1, le=8192)
     allow_cloud_data: bool = False
 
     @model_validator(mode="after")
@@ -46,6 +50,8 @@ class LlmConfig(BaseModel):
             raise ValueError("LLM_BASE_URL must be an absolute HTTP(S) URL")
         if not self.model.strip():
             raise ValueError("LLM_MODEL is required for the selected provider")
+        if self.max_output_tokens >= self.num_ctx:
+            raise ValueError("LLM_MAX_OUTPUT_TOKENS must be smaller than LLM_NUM_CTX")
         if self.provider is ProviderName.YANDEX:
             if not self.api_key.get_secret_value().strip():
                 raise ValueError("LLM_API_KEY is required for Yandex")
@@ -115,6 +121,11 @@ def load_llm_config(
         "timeout": _parse_float("LLM_TIMEOUT", values.get("LLM_TIMEOUT", "60")),
         "max_concurrency": _parse_int(
             "LLM_MAX_CONCURRENCY", values.get("LLM_MAX_CONCURRENCY", "1")
+        ),
+        "num_ctx": _parse_int("LLM_NUM_CTX", values.get("LLM_NUM_CTX", str(OLLAMA_NUM_CTX))),
+        "max_output_tokens": _parse_int(
+            "LLM_MAX_OUTPUT_TOKENS",
+            values.get("LLM_MAX_OUTPUT_TOKENS", str(OLLAMA_MAX_OUTPUT_TOKENS)),
         ),
         "allow_cloud_data": _parse_bool(
             "ALLOW_CLOUD_DATA",

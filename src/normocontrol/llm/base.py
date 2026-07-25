@@ -76,6 +76,7 @@ class ProbeResult(StrictModel):
     provider: NonEmptyString
     available: bool
     model_available: bool = False
+    schema_available: bool = False
     detail: NonEmptyString
 
 

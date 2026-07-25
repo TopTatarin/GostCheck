@@ -18,13 +18,19 @@ from typing import Any, Literal, Self
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-DEFAULT_MODEL = "qwen3:8b-q4_K_M"
-# Explicit IPv4 loopback avoids Windows installations where ``localhost`` resolves
-# to an IPv6 listener/proxy while the Ollama tray binds only 127.0.0.1.
-DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
+from normocontrol.llm.config import (
+    OLLAMA_BASE_URL,
+    OLLAMA_MAX_OUTPUT_TOKENS,
+    OLLAMA_MODEL,
+    OLLAMA_NUM_CTX,
+)
+from normocontrol.llm.ollama import native_api_url
+
+DEFAULT_MODEL = OLLAMA_MODEL
+DEFAULT_OLLAMA_URL = OLLAMA_BASE_URL
 DEFAULT_YANDEX_URL = "https://ai.api.cloud.yandex.net/v1"
-DEFAULT_NUM_CTX = 8192
-DEFAULT_MAX_OUTPUT_TOKENS = 512
+DEFAULT_NUM_CTX = OLLAMA_NUM_CTX
+DEFAULT_MAX_OUTPUT_TOKENS = OLLAMA_MAX_OUTPUT_TOKENS
 MAX_CONCURRENCY = 1
 MIN_RECOMMENDED_NVIDIA_DRIVER_MAJOR = 531
 MIN_CPU_RAM_MIB = 12 * 1024
@@ -286,6 +292,11 @@ def ollama_processor_split(model: str) -> ProcessorSplit:
     return ProcessorSplit(mode="unknown") if output is None else parse_ollama_ps(output, model)
 
 
+def stop_ollama_model(model: str) -> bool:
+    """Unload a live-smoke model without raising when Ollama is unavailable."""
+    return _run_command(("ollama", "stop", model)) is not None
+
+
 def _json_object(response: httpx.Response, context: str) -> dict[str, Any]:
     try:
         response.raise_for_status()
@@ -301,7 +312,7 @@ def _json_object(response: httpx.Response, context: str) -> dict[str, Any]:
 def probe_ollama_model(client: httpx.Client, base_url: str, model: str) -> tuple[bool, str | None]:
     """Check the configured model and return its full digest when available."""
     try:
-        response = client.get(f"{base_url.rstrip('/')}/api/tags")
+        response = client.get(native_api_url(base_url, "/api/tags"))
         payload = _json_object(response, "Ollama model probe failed")
     except httpx.HTTPError as error:
         raise BenchmarkError("Ollama endpoint is unavailable") from error
@@ -418,7 +429,7 @@ def request_schema(
 ) -> RequestMetrics:
     schema = SmokeResponse.model_json_schema()
     if provider == "ollama":
-        url = f"{base_url.rstrip('/')}/api/chat"
+        url = native_api_url(base_url, "/api/chat")
         body: dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -507,7 +518,10 @@ def build_record(
             raise BenchmarkError("ollama --version failed; install Ollama and add it to PATH")
 
     owned_client = client is None
-    active_client = client or httpx.Client(timeout=args.timeout)
+    active_client = client or httpx.Client(
+        timeout=args.timeout,
+        trust_env=provider != "ollama",
+    )
     try:
         if provider == "ollama":
             available, model_digest = probe_ollama_model(active_client, base_url, model)

@@ -60,14 +60,24 @@ $arguments = @(
 )
 if ($ForceCpu) { $arguments += "--force-cpu" }
 
-& python @arguments
-if ($LASTEXITCODE -ne 0) { throw "The Ollama schema smoke failed with exit code $LASTEXITCODE." }
+try {
+    & python @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "The Ollama schema smoke failed with exit code $LASTEXITCODE."
+    }
 
-Write-Host "Processor placement after request:"
-$placement = & ollama ps
-if ($LASTEXITCODE -ne 0) { throw "ollama ps failed after the request." }
-$placement | Write-Host
-if ($nvidiaSmi -and ($placement -match "100% CPU")) {
-    Write-Warning "NVIDIA GPU is present, but Ollama reports 100% CPU placement."
+    Write-Host "Processor placement after request:"
+    $placement = & ollama ps
+    if ($LASTEXITCODE -ne 0) { throw "ollama ps failed after the request." }
+    $placement | Write-Host
+    if ($nvidiaSmi -and ($placement -match "100% CPU")) {
+        Write-Warning "NVIDIA GPU is present, but Ollama reports 100% CPU placement."
+    }
+    Write-Host "Ollama advisory schema smoke passed."
 }
-Write-Host "Ollama advisory schema smoke passed."
+finally {
+    & ollama stop $Model
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "ollama stop failed; verify VRAM state with 'ollama ps'."
+    }
+}

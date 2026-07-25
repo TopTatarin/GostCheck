@@ -86,9 +86,18 @@ def test_model_probe_returns_digest_and_detects_a_different_model() -> None:
     assert missing is False
 
 
+def test_benchmark_reuses_ipv4_production_defaults() -> None:
+    assert benchmark.DEFAULT_OLLAMA_URL == "http://127.0.0.1:11434/v1"
+    assert benchmark.DEFAULT_MODEL == "qwen3:8b-q4_K_M"
+    assert "localhost" not in benchmark.DEFAULT_OLLAMA_URL
+
+
 def test_schema_request_accepts_missing_usage_and_backward_clock() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
+        assert request.url.path == "/api/chat"
+        assert body["think"] is False
+        assert body["format"]["additionalProperties"] is False
         assert body["options"]["num_ctx"] == 8192
         assert body["options"]["num_predict"] == 512
         return httpx.Response(
@@ -193,7 +202,10 @@ def _ollama_transport(request: httpx.Request) -> httpx.Response:
         )
     body = json.loads(request.content)
     assert body["stream"] is False
+    assert body["think"] is False
     assert body["format"]["additionalProperties"] is False
+    assert body["options"]["num_ctx"] == benchmark.DEFAULT_NUM_CTX
+    assert body["options"]["num_predict"] == benchmark.DEFAULT_MAX_OUTPUT_TOKENS
     return httpx.Response(
         200,
         json={

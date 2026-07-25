@@ -93,6 +93,7 @@ class OpenAICompatibleProvider(LlmProvider):
             provider=self.name,
             available=True,
             model_available=model_available,
+            schema_available=model_available,
             detail="ready" if model_available else "configured model is not available",
         )
 
@@ -165,6 +166,14 @@ class OpenAICompatibleProvider(LlmProvider):
         content = getattr(assistant_message, "content", None)
         if content is None:
             raise LlmResponseError(f"{self.name} response content is null")
+        return self._validate_content(content, response_model)
+
+    def _validate_content[ResponseT: BaseModel](
+        self,
+        content: str,
+        response_model: type[ResponseT],
+    ) -> ResponseT:
+        """Validate assistant content without including it in diagnostics."""
         cleaned = content.strip()
         fenced = _MARKDOWN_JSON.fullmatch(cleaned)
         if fenced is not None:

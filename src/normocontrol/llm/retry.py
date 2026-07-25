@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from time import time
 
+import httpx
 from openai import APIStatusError, APITimeoutError
 from tenacity import (
     RetryCallState,
@@ -30,17 +31,23 @@ class RetryPolicy:
 
 def is_retryable(error: BaseException) -> bool:
     """Retry only timeouts, rate limits, and server-side HTTP failures."""
-    if isinstance(error, APITimeoutError):
+    if isinstance(error, (APITimeoutError, httpx.TimeoutException)):
         return True
-    return isinstance(error, APIStatusError) and (
-        error.status_code == 429 or 500 <= error.status_code <= 599
-    )
+    if isinstance(error, APIStatusError):
+        status_code = error.status_code
+    elif isinstance(error, httpx.HTTPStatusError):
+        status_code = error.response.status_code
+    else:
+        return False
+    return status_code == 429 or 500 <= status_code <= 599
 
 
 def _retry_after_seconds(error: BaseException) -> float | None:
-    if not isinstance(error, APIStatusError):
+    if isinstance(error, (APIStatusError, httpx.HTTPStatusError)):
+        response = error.response
+    else:
         return None
-    value = error.response.headers.get("Retry-After")
+    value = response.headers.get("Retry-After")
     if value is None:
         return None
     try:

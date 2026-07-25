@@ -26,6 +26,24 @@ def test_three_providers_share_one_non_blocking_domain_contract() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
+        if request.url.path == "/api/chat":
+            assert body["think"] is False
+            assert body["format"]["additionalProperties"] is False
+            assert body["options"]["num_ctx"] == 8192
+            return httpx.Response(
+                200,
+                json={
+                    "model": "contract-model",
+                    "done": True,
+                    "done_reason": "stop",
+                    "message": {
+                        "role": "assistant",
+                        "content": expected.model_dump_json(),
+                        "thinking": "",
+                    },
+                },
+                request=request,
+            )
         assert body["response_format"]["type"] == "json_schema"
         return httpx.Response(
             200,
