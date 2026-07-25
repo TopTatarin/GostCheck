@@ -145,9 +145,7 @@ def test_str04_warns_on_volume_outside_range() -> None:
     patched_sections: list[Section] = []
     for section in base.sections:
         if section.title == "Введение":
-            patched_sections.append(
-                section.model_copy(update={"page_start": 1, "page_end": 10})
-            )
+            patched_sections.append(section.model_copy(update={"page_start": 1, "page_end": 10}))
         else:
             patched_sections.append(section)
     bundle = base.model_copy(

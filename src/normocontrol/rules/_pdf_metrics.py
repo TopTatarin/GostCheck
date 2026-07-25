@@ -73,8 +73,7 @@ def font_size_match_ratio(
     matched = sum(
         1
         for span in items
-        if span.font_size is not None
-        and abs(span.font_size - expected_pt) <= tolerance_pt
+        if span.font_size is not None and abs(span.font_size - expected_pt) <= tolerance_pt
     )
     return matched / len(items)
 

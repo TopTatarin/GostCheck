@@ -11,8 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "latex"
 CONFIG = ROOT / "config"
 
-CLS = textwrap.dedent(
-    r"""
+CLS = (
+    textwrap.dedent(
+        r"""
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesClass{gostcheck-vkr}[2025/01/01 GostCheck fixture class]
 \LoadClass{article}
@@ -35,7 +36,9 @@ CLS = textwrap.dedent(
 \RequirePackage{longtable}
 \RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex-gost}
 """
-).strip() + "\n"
+    ).strip()
+    + "\n"
+)
 CLS_HASH = sha256_bytes(CLS.encode("utf-8"))
 
 SECTIONS: tuple[str, ...] = (

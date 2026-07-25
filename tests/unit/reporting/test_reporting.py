@@ -118,16 +118,12 @@ def test_schema_validation_pass_fail_mixed_degraded(tmp_path: Path) -> None:
 def test_fingerprint_stable_after_absolute_path_change() -> None:
     first = _finding(
         path=r"C:\Users\a\GostCheck\tests\fixtures\demo\fail\main.tex",
-        evidence=(
-            Evidence(locator=r"C:\Users\a\GostCheck\tests\fixtures\demo\fail\main.tex:3"),
-        ),
+        evidence=(Evidence(locator=r"C:\Users\a\GostCheck\tests\fixtures\demo\fail\main.tex:3"),),
     )
     second = _finding(
         path=r"C:\Users\b\work\GostCheck\tests\fixtures\demo\fail\main.tex",
         evidence=(
-            Evidence(
-                locator=r"C:\Users\b\work\GostCheck\tests\fixtures\demo\fail\main.tex:3"
-            ),
+            Evidence(locator=r"C:\Users\b\work\GostCheck\tests\fixtures\demo\fail\main.tex:3"),
         ),
     )
     assert finding_fingerprint(first, repo_root=Path(r"C:\Users\a\GostCheck")) == (

@@ -14,6 +14,7 @@ from normocontrol.tools.latexmk import LatexBuildResult, LatexBuildService, Late
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "normocontrol.yml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 REQUIRED_JOBS = ("lint-and-unit", "formal-gate")
 
 
@@ -42,6 +43,37 @@ def test_workflow_permissions_and_triggers() -> None:
     publish_perms = payload["jobs"]["publish-report"]["permissions"]
     assert publish_perms["pull-requests"] == "write"
     assert publish_perms["contents"] == "read"
+
+
+@pytest.mark.parametrize(
+    ("workflow", "job_name"),
+    (
+        (WORKFLOW, "lint-and-unit"),
+        (CI_WORKFLOW, "quality"),
+    ),
+)
+def test_quality_checks_are_separate_and_ordered(workflow: Path, job_name: str) -> None:
+    payload = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    steps = payload["jobs"][job_name]["steps"]
+    commands = [step["run"] for step in steps if "run" in step]
+    format_step = next(
+        step for step in steps if step.get("run") == "python -m ruff format --check ."
+    )
+
+    expected = (
+        "python -m ruff format --check .",
+        "python -m ruff check .",
+        "python -m mypy src/normocontrol",
+    )
+    positions = [commands.index(command) for command in expected]
+    pytest_positions = [
+        index for index, command in enumerate(commands) if command.startswith("python -m pytest -q")
+    ]
+
+    assert positions == sorted(positions)
+    assert len(set(positions)) == len(expected)
+    assert pytest_positions == [positions[-1] + 1]
+    assert "continue-on-error" not in format_step
 
 
 def test_formal_gate_uploads_artifact_always() -> None:
