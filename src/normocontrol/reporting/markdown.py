@@ -117,6 +117,7 @@ def render_summary(
             f"| Warnings | {counts.get('warnings', 0)} |",
             f"| LLM advisory | {counts.get('llm_advisory', 0)} |",
             f"| Unverifiable | {counts.get('unverifiable', 0)} |",
+            f"| Blocking unverifiable | {counts.get('blocking_unverifiable', 0)} |",
             f"| Approvals required | {counts.get('approvals_required', 0)} |",
             "",
             f"Gate: `{gate}` · exit `{published.get('exit_code', 0)}`",

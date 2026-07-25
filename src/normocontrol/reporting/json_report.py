@@ -47,6 +47,25 @@ class ReportMeta:
     repo_root: Path | None = None
 
 
+def utc_now() -> datetime:
+    """Return the current aware UTC time for production report metadata."""
+    return datetime.now(UTC)
+
+
+def _report_timestamp(clock: Clock | None) -> datetime:
+    """Normalize injected clocks to second-precision UTC.
+
+    Naive values are interpreted as UTC so test hooks never depend on the host
+    timezone.
+    """
+    stamp = (clock or utc_now)()
+    if stamp.tzinfo is None or stamp.utcoffset() is None:
+        stamp = stamp.replace(tzinfo=UTC)
+    else:
+        stamp = stamp.astimezone(UTC)
+    return stamp.replace(microsecond=0)
+
+
 def default_recommendation(finding: Finding) -> str:
     """Provide a short actionable hint without inventing domain expertise."""
     if finding.status is FindingStatus.FAIL:
@@ -155,6 +174,7 @@ def build_published_report(
 ) -> dict[str, Any]:
     """Assemble the versioned published report document."""
     findings = collect_findings(report)
+    counts = count_findings(findings)
     published_findings = [
         publish_finding(
             finding,
@@ -168,7 +188,7 @@ def build_published_report(
     ]
     # Keep NOT_APPLICABLE/PASS out of the human report unless approval flagged;
     # still retain stages for machine consumers.
-    stamp = (clock or (lambda: datetime.now(UTC)))().astimezone(UTC).replace(microsecond=0)
+    stamp = _report_timestamp(clock)
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "header": {
@@ -178,14 +198,14 @@ def build_published_report(
             "model_id": meta.model_id,
             "tool_version": report.tool_version,
             "gate_status": gate_status_for(report),
-            "degraded": meta.degraded,
+            "degraded": meta.degraded or counts["blocking_unverifiable"] > 0,
             "approvals_required": meta.approvals_required
             or any("APPROVAL_REQUIRED" in f.message.upper() for f in findings),
             "generated_at": stamp.isoformat().replace("+00:00", "Z"),
             "artifact_name": meta.artifact_name,
         },
         "exit_code": int(report.exit_code),
-        "counts": count_findings(findings),
+        "counts": counts,
         "findings": published_findings,
         "stages": json.loads(report.model_dump_json())["stages"],
     }

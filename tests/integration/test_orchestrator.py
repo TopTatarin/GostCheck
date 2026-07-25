@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -25,6 +28,7 @@ DEMO_PASS = ROOT / "tests" / "fixtures" / "demo" / "pass"
 DEMO_FAIL = ROOT / "tests" / "fixtures" / "demo" / "fail"
 RUBRIC = ROOT / "rubric.yaml"
 CONFIG = ROOT / "normocontrol.yaml.example"
+PDF_PASS = ROOT / "tests" / "fixtures" / "pdf" / "fmt_pass.pdf"
 
 
 class _SuccessBuild(LatexBuildService):
@@ -109,6 +113,22 @@ def test_semantic_tool_error_keeps_exit_zero_after_formal_pass(tmp_path: Path) -
     semantic = next(stage for stage in report.stages if stage.name == "semantic")
     assert any(item.status is FindingStatus.UNVERIFIABLE for item in semantic.findings)
     assert all(item.layer is RuleLayer.LLM for item in semantic.findings)
+    published = json.loads((tmp_path / "out" / "report.json").read_text(encoding="utf-8"))
+    assert published["header"]["degraded"] is True
+    assert published["counts"]["blocking_unverifiable"] == 0
+
+
+def test_disabled_llm_does_not_enable_degraded_mode(tmp_path: Path) -> None:
+    report = run_pipeline(
+        _request(tmp_path, PDF_PASS, only=parse_only(("FMT-01",))),
+        OrchestratorHooks(build_service=_SuccessBuild()),
+    )
+
+    published = json.loads((tmp_path / "out" / "report.json").read_text(encoding="utf-8"))
+    assert report.exit_code is ExitCode.SUCCESS
+    assert published["header"]["model_id"] is None
+    assert published["header"]["degraded"] is False
+    assert published["counts"]["blocking_unverifiable"] == 0
 
 
 def test_cache_hit_miss_and_invalidation(tmp_path: Path) -> None:
@@ -126,6 +146,75 @@ def test_cache_hit_miss_and_invalidation(tmp_path: Path) -> None:
     assert third.exit_code is ExitCode.SUCCESS
 
 
+def test_cached_stages_keep_current_aggregate_timestamp(tmp_path: Path) -> None:
+    first_stamp = datetime(2026, 7, 24, 10, 0, tzinfo=UTC)
+    second_stamp = datetime(2026, 7, 24, 11, 0, tzinfo=UTC)
+    run_pipeline(
+        _request(tmp_path, DEMO_PASS),
+        OrchestratorHooks(
+            build_service=_SuccessBuild(),
+            report_clock=lambda: first_stamp,
+        ),
+    )
+    run_pipeline(
+        _request(tmp_path, DEMO_PASS),
+        OrchestratorHooks(
+            build_service=_SuccessBuild(),
+            report_clock=lambda: second_stamp,
+        ),
+    )
+
+    build_stage = json.loads(
+        (tmp_path / "out" / "stages" / "build.json").read_text(encoding="utf-8")
+    )
+    published = json.loads((tmp_path / "out" / "report.json").read_text(encoding="utf-8"))
+    assert build_stage["meta"]["cache"] == "hit"
+    assert published["header"]["generated_at"] == "2026-07-24T11:00:00Z"
+
+
+def test_corrupt_cache_is_ignored_and_rebuilt(tmp_path: Path) -> None:
+    first_stamp = datetime(2026, 7, 24, 10, 0, tzinfo=UTC)
+    second_stamp = datetime(2026, 7, 24, 11, 0, tzinfo=UTC)
+    request = _request(tmp_path, DEMO_PASS)
+    run_pipeline(
+        request,
+        OrchestratorHooks(
+            build_service=_SuccessBuild(),
+            report_clock=lambda: first_stamp,
+        ),
+    )
+    for cache_path in (tmp_path / "out" / "cache").rglob("*.json"):
+        cache_path.write_text("{synthetic corrupt cache", encoding="utf-8")
+
+    report = run_pipeline(
+        request,
+        OrchestratorHooks(
+            build_service=_SuccessBuild(),
+            report_clock=lambda: second_stamp,
+        ),
+    )
+
+    published = json.loads((tmp_path / "out" / "report.json").read_text(encoding="utf-8"))
+    run_state = json.loads((tmp_path / "out" / "run_state.json").read_text(encoding="utf-8"))
+    assert report.exit_code is ExitCode.SUCCESS
+    assert published["header"]["generated_at"] == "2026-07-24T11:00:00Z"
+    assert any("corrupt" in message for message in run_state["messages"])
+
+
+def test_backward_duration_clock_never_publishes_negative_duration(tmp_path: Path) -> None:
+    ticks = iter(float(value) for value in range(100, 0, -1))
+    report = run_pipeline(
+        _request(tmp_path, DEMO_PASS),
+        OrchestratorHooks(
+            build_service=_SuccessBuild(),
+            clock=lambda: next(ticks),
+            report_clock=lambda: datetime(2026, 7, 24, tzinfo=UTC),
+        ),
+    )
+
+    assert all(stage.duration_ms >= 0 for stage in report.stages)
+
+
 def test_unknown_only_prefix_raises_config_error() -> None:
     with pytest.raises(ConfigurationError, match="unknown --only prefix"):
         parse_only(("not-a-stage",))
@@ -135,7 +224,9 @@ def test_parallel_lock_and_stale_lock(tmp_path: Path) -> None:
     out = tmp_path / "locked"
     with OutputLock(out), pytest.raises(Exception, match="locked"):
         OutputLock(out).acquire()
-    atomic_write_json(out / ".normocontrol.lock", {"pid": 1})
+    lock_path = out / ".normocontrol.lock"
+    atomic_write_json(lock_path, {"pid": 1})
+    os.utime(lock_path, (0, 0))
     lock = OutputLock(out, stale_after_s=0.0)
     lock.acquire()
     lock.release()
@@ -181,6 +272,11 @@ def test_pdf_only_source_runs_degraded(tmp_path: Path) -> None:
     )
     assert report.exit_code in {ExitCode.SUCCESS, ExitCode.FORMAL_FAILURE}
     assert any(stage.name == "formal" for stage in report.stages)
+    published = json.loads((tmp_path / "out" / "report.json").read_text(encoding="utf-8"))
+    markdown = (tmp_path / "out" / "report.md").read_text(encoding="utf-8")
+    assert published["header"]["degraded"] is True
+    assert published["counts"]["blocking_unverifiable"] > 0
+    assert "Blocking unverifiable" in markdown
 
 
 def test_canceled_flag_writes_summary(tmp_path: Path) -> None:
@@ -188,4 +284,6 @@ def test_canceled_flag_writes_summary(tmp_path: Path) -> None:
     orch._canceled = True
     request = _request(tmp_path, DEMO_PASS, only=parse_only(("build",)))
     report = orch.run(request)
-    assert (tmp_path / "out" / "canceled.json").is_file() or report.stages
+    canceled = json.loads((tmp_path / "out" / "canceled.json").read_text(encoding="utf-8"))
+    assert canceled["canceled"] is True
+    assert canceled["exit_code"] == int(report.exit_code)

@@ -49,6 +49,11 @@ With `fail_closed=false`, the same errors are reported as `unverifiable` warning
 Published schema `1.2` keeps separate `formal_errors` and
 `blocking_unverifiable` counters. The general `unverifiable` counter still
 contains both blocking formal and non-blocking advisory results.
+The published header sets `degraded=true` whenever
+`blocking_unverifiable > 0`, even if the build stage itself completed. Missing
+formal sources/tools are therefore visible in the JSON header, counts, Markdown,
+and GitHub summary. LLM/vision incomplete checks never increment the blocking
+counter and do not enable degraded mode by themselves.
 
 ## PDF-only formatting
 

@@ -30,6 +30,7 @@ normocontrol run PATH \
 | Код | Значение |
 |----:|----------|
 | 0 | Успех или только неблокирующие advisory-результаты |
+| 1 | Ошибка выполнения команды вне formal gate (зарезервированный публичный runtime-код) |
 | 2 | Formal gate fail: `error+fail` либо блокирующий `error+unverifiable` |
 | 3 | Ошибка конфигурации/входа (нет файла, неизвестный `--only`/`--profile`, lock) |
 | 4 | Внутренняя/инструментальная ошибка при `--fail-closed` |
@@ -65,6 +66,13 @@ out/
 ```
 
 `report.json` всегда публикуется, в том числе при formal fail. Рендерер **не** меняет gate.
+`header.generated_at` содержит фактическое время текущего aggregate-запуска в UTC
+с точностью до секунд (`YYYY-MM-DDTHH:MM:SSZ`), включая запуски с cache hit.
+`header.degraded=true` означает, что обязательная formal-проверка осталась
+неполной; число таких блокирующих результатов вынесено в
+`counts.blocking_unverifiable` и показывается в Markdown/summary. Advisory
+LLM/vision `unverifiable` в этот счётчик не входят и сами по себе не включают
+degraded mode.
 
 Запись стадий атомарна. Повторный запуск с тем же входом использует cache hit; смена rubric/config/tool/model инвалидирует ключ. LLM-cache изолирован по `model_hash`.
 

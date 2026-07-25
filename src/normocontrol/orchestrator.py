@@ -8,7 +8,6 @@ import signal
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +15,7 @@ from pydantic import ValidationError
 
 from normocontrol.cache import (
     CACHE_DIR_NAME,
+    CacheError,
     CacheKeyParts,
     LockError,
     OutputLock,
@@ -46,7 +46,7 @@ from normocontrol.llm.disabled import DisabledProvider
 from normocontrol.llm.ollama import OllamaProvider
 from normocontrol.llm.yandex import YandexProvider
 from normocontrol.reporting.aggregate import publish_reports
-from normocontrol.reporting.json_report import ReportMeta
+from normocontrol.reporting.json_report import Clock, ReportMeta, utc_now
 from normocontrol.rubric.expansion import expand_rubric
 from normocontrol.rubric.loader import load_config, load_rubric
 from normocontrol.rubric.models import EffectiveRubric, NormocontrolConfig, WorkProfile
@@ -70,6 +70,7 @@ class OrchestratorHooks:
     build_service: LatexBuildService | None = None
     provider_factory: ProviderFactory | None = None
     clock: Callable[[], float] = time.perf_counter
+    report_clock: Clock = utc_now
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,7 +240,7 @@ class Orchestrator:
                         artifact_name=None,
                         repo_root=None,
                     ),
-                    clock=lambda: datetime(2026, 7, 24, tzinfo=UTC),
+                    clock=self._hooks.report_clock,
                 )
                 self._write_stage_artifact(
                     request.out_dir,
@@ -369,7 +370,7 @@ class Orchestrator:
     ) -> tuple[StageResult, PipelineArtifacts, dict[str, Any]]:
         started = self._hooks.clock()
         key = CacheKeyParts(stage=StageName.BUILD.value, model_hash="none", **base_key)
-        cached = cache.get(key)
+        cached = self._read_cache(cache, key, state)
         if cached is not None:
             bundle = DocumentBundle.model_validate(cached["bundle"])
             if source.suffix.casefold() == ".tex":
@@ -549,7 +550,7 @@ class Orchestrator:
             ),
             **base_key,
         )
-        cached = cache.get(key)
+        cached = self._read_cache(cache, key, state)
         if cached is not None:
             findings = tuple(Finding.model_validate(item) for item in cached["findings"])
             duration = max(0.0, (self._hooks.clock() - started) * 1000.0)
@@ -664,7 +665,7 @@ class Orchestrator:
 
         model_hash = hash_text(f"{llm_config.provider.value}:{llm_config.model or 'none'}")
         key = CacheKeyParts(stage=StageName.SEMANTIC.value, model_hash=model_hash, **base_key)
-        cached = cache.get(key)
+        cached = self._read_cache(cache, key, state)
         if cached is not None:
             findings = tuple(Finding.model_validate(item) for item in cached["findings"])
             duration = max(0.0, (self._hooks.clock() - started) * 1000.0)
@@ -712,6 +713,19 @@ class Orchestrator:
         if formal_findings:
             return formal_exit_code(formal_findings)
         return ExitCode.SUCCESS
+
+    @staticmethod
+    def _read_cache(
+        cache: StageCache,
+        key: CacheKeyParts,
+        state: RunState,
+    ) -> dict[str, Any] | None:
+        """Treat a validated cache read failure as a miss for the current run."""
+        try:
+            return cache.get(key)
+        except CacheError:
+            state.messages.append(f"corrupt {key.stage} cache ignored")
+            return None
 
     def _canceled_report(
         self,

@@ -4,23 +4,20 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from normocontrol.cache import atomic_write_json, atomic_write_text
 from normocontrol.domain import RunReport
 from normocontrol.reporting.json_report import (
+    Clock,
     ReportMeta,
     build_published_report,
     load_report_schema,
     validate_published_report,
 )
 from normocontrol.reporting.markdown import render_markdown, render_summary
-
-Clock = Callable[[], datetime]
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +85,7 @@ def publish_reports(
     published = build_published_report(
         report,
         resolved_meta,
-        clock=clock or (lambda: datetime(2026, 1, 1, tzinfo=UTC)),
+        clock=clock,
     )
     if validate:
         schema = load_report_schema(schema_path) if schema_path else load_report_schema()
