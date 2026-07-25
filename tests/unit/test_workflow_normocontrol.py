@@ -94,6 +94,7 @@ def test_latexmk_cannot_be_soft_failed_or_degraded() -> None:
 
 def test_setup_installs_and_verifies_minimal_tex_toolchain() -> None:
     payload = _load_yaml(SETUP_ACTION)
+    assert payload["inputs"]["install-python"]["default"] == "true"
     assert payload["inputs"]["install-tex"]["default"] == "false"
     install = next(
         step for step in payload["runs"]["steps"] if step["name"] == "Install TeX toolchain"
@@ -122,10 +123,26 @@ def test_setup_installs_and_verifies_minimal_tex_toolchain() -> None:
     assert "msttcorefonts" not in script
 
     workflow = _load_yaml(WORKFLOW)
-    for job_name in ("build-latex", "formal-gate"):
-        assert workflow["jobs"][job_name]["runs-on"] == "ubuntu-24.04"
-        setup = _step_by_name(workflow["jobs"][job_name], "Setup normocontrol")
-        assert setup["with"]["install-tex"] == "true"
+    assert workflow["jobs"]["build-latex"]["runs-on"] == "ubuntu-24.04"
+    build_setup = _step_by_name(workflow["jobs"]["build-latex"], "Setup normocontrol")
+    assert build_setup["with"] == {
+        "install-python": "false",
+        "install-tex": "true",
+    }
+    formal = workflow["jobs"]["formal-gate"]
+    assert formal["runs-on"] == "ubuntu-24.04"
+    tex_setup = _step_by_name(formal, "Setup mandatory TeX toolchain")
+    assert tex_setup["with"] == {
+        "install-python": "false",
+        "install-tex": "true",
+    }
+    formal_step_names = [step["name"] for step in _job_steps(formal)]
+    assert formal_step_names.index("Formal gate on pass fixture") < formal_step_names.index(
+        "Setup mandatory TeX toolchain"
+    )
+    assert formal_step_names.index("Setup mandatory TeX toolchain") < formal_step_names.index(
+        "Compile and validate synthetic LaTeX fixtures"
+    )
     lint_setup = _step_by_name(workflow["jobs"]["lint-and-unit"], "Setup normocontrol")
     assert "with" not in lint_setup
 

@@ -5,6 +5,10 @@ inputs:
     description: Python version
     required: false
     default: "3.12"
+  install-python:
+    description: Install Python and locked GostCheck dependencies
+    required: false
+    default: "true"
   install-tex:
     description: Install the reproducible TeX toolchain used by LaTeX CI jobs
     required: false
@@ -40,6 +44,7 @@ runs:
         fc-match "FreeSerif" | grep -F "FreeSerif"
         fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
     - name: Set up Python
+      if: ${{ inputs.install-python == 'true' }}
       uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
@@ -48,6 +53,7 @@ runs:
           requirements.lock
           pyproject.toml
     - name: Install locked dependencies
+      if: ${{ inputs.install-python == 'true' }}
       shell: bash
       run: |
         python -m pip install --upgrade pip

@@ -15,6 +15,8 @@ tools has a degraded-success path.
 An absent `.sty` or a biber parse error is blocking. Reproduce with
 `latexmk -xelatex -Werror -interaction=nonstopmode -halt-on-error -file-line-error
 -outdir=build/latex/local main.tex`.
+The source-level `normocontrol` fixture checks run before TeX setup; the same
+required job then installs TeX and must pass the independent XeLaTeX build.
 
 ## PDF exists but references are unresolved
 

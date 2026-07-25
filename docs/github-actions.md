@@ -50,7 +50,14 @@ to `TeX Gyre Termes` on GitHub-hosted runners. Polyglossia uses FreeSerif for
 Cyrillic glyphs missing from Ubuntu 24.04's TeX Gyre Termes. Proprietary Times
 New Roman is not installed in CI.
 
-The same gate verifies that a missing `.sty`, a permanently unresolved
+The same required job first runs the unchanged source-level `normocontrol`
+pass/fail fixtures, then installs TeX and runs the hard build checks. This
+ordering avoids feeding the deliberately free CI font into the separate PDF
+rule that requires an embedded Times-compatible font name; that public rule is
+not weakened. The job cannot finish green before the later PDF and ChkTeX
+checks succeed.
+
+The gate verifies that a missing `.sty`, a permanently unresolved
 reference, a biber parse error, and a blocking ChkTeX diagnostic all return
 nonzero. `latexmk -Werror` promotes final unresolved reference/citation
 diagnostics after all required passes; the explicit final-log check provides
