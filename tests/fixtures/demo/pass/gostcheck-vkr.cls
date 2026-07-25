@@ -2,7 +2,13 @@
 \ProvidesClass{gostcheck-vkr}[2025/01/01 GostCheck fixture class]
 \LoadClass{article}
 \RequirePackage{fontspec}
-\setmainfont{Times New Roman}
+\RequirePackage{polyglossia}
+\setdefaultlanguage{russian}
+\IfFontExistsTF{Times New Roman}
+  {\setmainfont{Times New Roman}\newfontfamily\cyrillicfont{Times New Roman}}
+  {\setmainfont{TeX Gyre Termes}\newfontfamily\cyrillicfont{FreeSerif}}
+\newfontfamily\cyrillicfontsf{FreeSans}
+\newfontfamily\cyrillicfonttt{FreeMono}
 \RequirePackage{titlesec}
 \RequirePackage{setspace}
 \onehalfspacing
@@ -18,4 +24,4 @@
 \counterwithin{table}{section}
 \RequirePackage{amsmath}
 \RequirePackage{longtable}
-\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex-gost}
+\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex}

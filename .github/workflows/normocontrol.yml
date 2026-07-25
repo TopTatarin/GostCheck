@@ -33,27 +33,28 @@ jobs:
 
   build-latex:
     name: build-latex
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Setup normocontrol
         uses: ./.github/actions/setup-normocontrol
-      - name: Best-effort LaTeX build
+        with:
+          install-python: "false"
+          install-tex: "true"
+      - name: Diagnostic LaTeX build
         id: latex
         run: |
           set -euo pipefail
           mkdir -p build/latex
-          if command -v latexmk >/dev/null 2>&1; then
-            latexmk -interaction=nonstopmode -halt-on-error \
-              -outdir=build/latex tests/fixtures/demo/pass/main.tex \
-              > build/latex/latexmk.log 2>&1 || true
-            echo '{"status":"attempted","degraded":false}' > build/latex/status.json
-          else
-            echo "latexmk not installed on runner; marking degraded"
-            printf '%s\n' '{"status":"tool_missing","degraded":true}' > build/latex/status.json
-            printf '%s\n' 'latexmk executable not found' > build/latex/latexmk.log
-          fi
+          fixture_dir="$GITHUB_WORKSPACE/tests/fixtures/latex-ci/compile-pass/source with spaces"
+          out_dir="$GITHUB_WORKSPACE/build/latex/diagnostic"
+          mkdir -p "$out_dir"
+          pushd "$fixture_dir" >/dev/null
+          latexmk -xelatex -Werror -interaction=nonstopmode -halt-on-error -file-line-error \
+            -outdir="$out_dir" main.tex 2>&1 | tee "$out_dir/latexmk.log"
+          popd >/dev/null
+          test -s "$out_dir/main.pdf"
       - name: Upload LaTeX logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -65,7 +66,7 @@ jobs:
   formal-gate:
     name: formal-gate
     needs: [lint-and-unit]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -83,6 +84,85 @@ jobs:
           code=$?
           set -e
           test "$code" -eq 2
+      - name: Setup mandatory TeX toolchain
+        uses: ./.github/actions/setup-normocontrol
+        with:
+          install-python: "false"
+          install-tex: "true"
+      - name: Compile and validate synthetic LaTeX fixtures
+        run: |
+          set -euo pipefail
+
+          run_latex() {
+            local fixture_dir="$GITHUB_WORKSPACE/$1"
+            local out_dir="$GITHUB_WORKSPACE/$2"
+            mkdir -p "$out_dir"
+            pushd "$fixture_dir" >/dev/null
+            set +e
+            latexmk -xelatex -Werror -interaction=nonstopmode -halt-on-error -file-line-error \
+              -outdir="$out_dir" main.tex 2>&1 | tee "$out_dir/latexmk.log"
+            local latexmk_code="${PIPESTATUS[0]}"
+            set -e
+            popd >/dev/null
+            if [ "$latexmk_code" -ne 0 ]; then
+              return "$latexmk_code"
+            fi
+            if [ ! -s "$out_dir/main.pdf" ]; then
+              echo "latexmk exited successfully but did not create a non-empty PDF"
+              return 1
+            fi
+            if grep -Eiq \
+              'LaTeX Warning: (There were undefined references|Reference .+ undefined|Citation .+ undefined)|Package (biblatex|natbib) Warning:.*(undefined|rerun Biber)' \
+              "$out_dir/main.log"; then
+              echo "blocking unresolved reference diagnostic found in $out_dir/main.log"
+              return 1
+            fi
+          }
+
+          expect_latex_failure() {
+            if run_latex "$1" "$2"; then
+              echo "fixture $1 unexpectedly passed LaTeX validation"
+              return 1
+            fi
+          }
+
+          run_latex \
+            "tests/fixtures/latex-ci/compile-pass/source with spaces" \
+            "build/latex/formal-pass"
+          test -s build/latex/formal-pass/main.bbl
+          expect_latex_failure \
+            "tests/fixtures/latex-ci/compile-fail" \
+            "build/latex/compile-fail"
+          expect_latex_failure \
+            "tests/fixtures/latex-ci/unresolved-reference" \
+            "build/latex/unresolved-reference"
+          expect_latex_failure \
+            "tests/fixtures/latex-ci/biber-fail" \
+            "build/latex/biber-fail"
+      - name: Run blocking ChkTeX checks
+        run: |
+          set -euo pipefail
+
+          run_chktex() {
+            local source="$GITHUB_WORKSPACE/$1"
+            local log="$GITHUB_WORKSPACE/$2"
+            mkdir -p "$(dirname "$log")"
+            set +e
+            chktex -q "$source" 2>&1 | tee "$log"
+            local chktex_code="${PIPESTATUS[0]}"
+            set -e
+            return "$chktex_code"
+          }
+
+          run_chktex \
+            "tests/fixtures/latex-ci/compile-pass/source with spaces/main.tex" \
+            "build/latex/formal-pass/chktex.log"
+          if run_chktex \
+            "tests/fixtures/latex-ci/chktex-fail/main.tex" \
+            "build/latex/chktex-fail/chktex.log"; then
+            echo "blocking ChkTeX fixture unexpectedly passed"
+            exit 1
+          fi
       - name: Upload normocontrol report
         if: always()
         uses: actions/upload-artifact@v4
@@ -96,6 +176,7 @@ jobs:
             build/fail/report.json
             build/fail/report.md
             build/fail/summary.json
+            build/latex/
           if-no-files-found: warn
 
   publish-report:

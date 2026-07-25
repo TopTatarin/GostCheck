@@ -65,6 +65,43 @@ def test_security_and_acceptance_mention_branch_protection() -> None:
     assert "git tag" in acceptance
 
 
+def test_latex_gate_docs_match_hard_ci_contract() -> None:
+    actions = (ROOT / "docs" / "github-actions.md").read_text(encoding="utf-8")
+    setup = (ROOT / "docs" / "setup-linux.md").read_text(encoding="utf-8")
+    troubleshooting = (ROOT / "docs" / "troubleshooting.md").read_text(encoding="utf-8")
+
+    required_rows = {
+        match.group(1)
+        for match in re.finditer(
+            r"^\|\s*`([^`]+)`\s*\|\s*\*\*yes\*\*\s*\|",
+            actions,
+            flags=re.MULTILINE,
+        )
+    }
+    assert required_rows == {"lint-and-unit", "formal-gate"}
+    assert 'install-tex: "true"' in actions
+    assert "if: always()" in actions
+    assert "Proprietary Times" in actions
+    assert "not installed in CI." in actions
+
+    for package in (
+        "latexmk",
+        "chktex",
+        "texlive-xetex",
+        "biber",
+        "fonts-freefont-ttf",
+        "texlive-bibtex-extra",
+        "texlive-lang-cyrillic",
+        "fonts-texgyre",
+    ):
+        assert package in setup
+    assert "degraded success" in setup
+    assert "unresolved reference" in troubleshooting
+    assert "biber parse error" in troubleshooting
+    assert "ChkTeX blocks formal-gate" in troubleshooting
+    assert "Times New Roman absent on CI" in troubleshooting
+
+
 def test_local_markdown_links_resolve() -> None:
     """Relative repo links in key docs must point at existing files (no network)."""
     files = [

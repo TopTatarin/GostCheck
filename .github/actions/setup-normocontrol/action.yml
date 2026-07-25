@@ -5,10 +5,46 @@ inputs:
     description: Python version
     required: false
     default: "3.12"
+  install-python:
+    description: Install Python and locked GostCheck dependencies
+    required: false
+    default: "true"
+  install-tex:
+    description: Install the reproducible TeX toolchain used by LaTeX CI jobs
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
+    - name: Install TeX toolchain
+      if: ${{ inputs.install-tex == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends -y \
+          biber \
+          chktex \
+          fonts-freefont-ttf \
+          fonts-texgyre \
+          latexmk \
+          texlive-bibtex-extra \
+          texlive-fonts-recommended \
+          texlive-lang-cyrillic \
+          texlive-latex-extra \
+          texlive-xetex
+        command -v latexmk
+        command -v chktex
+        command -v xelatex
+        command -v biber
+        kpsewhich biblatex-gost.def
+        kpsewhich gost-numeric.bbx
+        fc-match "FreeMono" | grep -F "FreeMono"
+        fc-match "FreeSans" | grep -F "FreeSans"
+        fc-match "FreeSerif" | grep -F "FreeSerif"
+        fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
     - name: Set up Python
+      if: ${{ inputs.install-python == 'true' }}
       uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
@@ -17,6 +53,7 @@ runs:
           requirements.lock
           pyproject.toml
     - name: Install locked dependencies
+      if: ${{ inputs.install-python == 'true' }}
       shell: bash
       run: |
         python -m pip install --upgrade pip
