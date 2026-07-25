@@ -6,8 +6,15 @@ from typing import Any
 
 import pytest
 
+from normocontrol.llm.base import LlmRefusalError, LlmResponseError, LlmUnavailableError
+from normocontrol.llm.disabled import DisabledProvider
 from normocontrol.semantic.engine import RULE_SPECS, SemanticEngine
-from normocontrol.semantic.schemas import SEMANTIC_RULE_IDS, DiagnosticCode, SemanticStatus
+from normocontrol.semantic.schemas import (
+    IMPLEMENTED_RULE_IDS,
+    SEMANTIC_RULE_IDS,
+    DiagnosticCode,
+    SemanticStatus,
+)
 
 from .helpers import QueueProvider, make_bundle, response_payload
 
@@ -77,7 +84,12 @@ def test_invalid_duplicate_and_cross_section_evidence_downgrades_result(
 
 def test_schema_is_repaired_once_then_succeeds() -> None:
     invalid = response_payload("TSK-01", RULE_SPECS["TSK-01"].elements, confidence="high")
-    repaired = response_payload("TSK-01", RULE_SPECS["TSK-01"].elements)
+    repaired = response_payload(
+        "TSK-01",
+        RULE_SPECS["TSK-01"].elements,
+        quote="Цель измерима",
+        chunk_id="постановка-задачи:1",
+    )
     provider = QueueProvider([invalid, repaired])
 
     report = SemanticEngine(provider).run(make_bundle(), ("TSK-01",))
@@ -101,13 +113,18 @@ def test_second_schema_failure_returns_unverifiable() -> None:
     report = SemanticEngine(provider).run(make_bundle(), ("TSK-01",))
 
     assert report.findings[0].status is SemanticStatus.UNVERIFIABLE
-    assert report.findings[0].diagnostic is DiagnosticCode.INVALID_RESPONSE
+    assert report.findings[0].diagnostic is DiagnosticCode.INVALID_SCHEMA
     assert report.batches[0].attempts == 2
 
 
 def test_markdown_fenced_response_uses_the_single_repair_path() -> None:
     fenced = '```json\n{"rule_id":"TSK-01"}\n```'
-    repaired = response_payload("TSK-01", RULE_SPECS["TSK-01"].elements)
+    repaired = response_payload(
+        "TSK-01",
+        RULE_SPECS["TSK-01"].elements,
+        quote="Цель измерима",
+        chunk_id="постановка-задачи:1",
+    )
     provider = QueueProvider([fenced, repaired])
 
     report = SemanticEngine(provider).run(make_bundle(), ("TSK-01",))
@@ -137,6 +154,34 @@ def test_missing_section_and_goal_only_in_conclusion_are_not_inferred() -> None:
     assert report.findings[0].status is SemanticStatus.NOT_APPLICABLE
     assert report.findings[0].diagnostic is DiagnosticCode.SECTION_MISSING
     assert report.batches == ()
+
+
+def test_empty_named_section_is_reported_as_section_missing_without_provider_call() -> None:
+    provider = QueueProvider([])
+
+    report = SemanticEngine(provider).run(make_bundle((("Аннотация", ""),)), ("ANN-01",))
+
+    assert report.findings[0].diagnostic is DiagnosticCode.SECTION_MISSING
+    assert provider.calls == []
+
+
+def test_disabled_provider_never_enters_any_network_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def unexpected_network(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        nonlocal calls
+        calls += 1
+        raise AssertionError("disabled semantic provider attempted network I/O")
+
+    monkeypatch.setattr("httpx.Client.request", unexpected_network)
+
+    report = SemanticEngine(DisabledProvider()).run(make_bundle(), ("ANN-01",))
+
+    assert report.findings[0].diagnostic is DiagnosticCode.PROVIDER_DISABLED
+    assert calls == 0
 
 
 @pytest.mark.parametrize(
@@ -178,10 +223,75 @@ def test_rephrased_reordered_and_partially_completed_tasks_can_remain_weak() -> 
     assert all(element.state.value == "weak" for element in report.findings[0].elements)
 
 
-def test_remaining_semantic_rules_are_explicitly_not_implemented() -> None:
-    report = SemanticEngine(QueueProvider([])).run(make_bundle(), ("GEN-02", "STR-05"))
+@pytest.mark.parametrize(
+    ("responses", "diagnostic"),
+    [
+        (
+            [
+                LlmRefusalError("mock refused the request"),
+                LlmRefusalError("mock refused the request"),
+            ],
+            DiagnosticCode.INVALID_SCHEMA,
+        ),
+        (
+            [
+                LlmResponseError("mock response was truncated by the token limit"),
+                LlmResponseError("mock response was truncated by the token limit"),
+            ],
+            DiagnosticCode.INVALID_SCHEMA,
+        ),
+        (
+            [LlmUnavailableError("mock endpoint is unavailable")],
+            DiagnosticCode.PROVIDER_ERROR,
+        ),
+        (
+            [LlmUnavailableError("mock request timed out")],
+            DiagnosticCode.PROVIDER_TIMEOUT,
+        ),
+    ],
+)
+def test_provider_failures_have_distinct_safe_diagnostics(
+    responses: list[Exception],
+    diagnostic: DiagnosticCode,
+) -> None:
+    report = SemanticEngine(QueueProvider(responses)).run(make_bundle(), ("TSK-01",))
 
-    assert [finding.rule_id for finding in report.findings] == ["GEN-02", "STR-05"]
+    assert report.findings[0].status is SemanticStatus.UNVERIFIABLE
+    assert report.findings[0].diagnostic is diagnostic
+
+
+def test_wrong_implemented_rule_id_is_rejected_after_one_repair() -> None:
+    wrong = response_payload("TSK-03", (), status="not_applicable")
+    provider = QueueProvider([wrong, wrong])
+
+    report = SemanticEngine(provider).run(make_bundle(), ("TSK-01",))
+
+    assert report.findings[0].diagnostic is DiagnosticCode.INVALID_SCHEMA
+    assert report.batches[0].attempts == 2
+
+
+def test_missing_required_element_is_rejected_after_one_repair() -> None:
+    elements = RULE_SPECS["TSK-01"].elements[:-1]
+    incomplete = response_payload(
+        "TSK-01",
+        elements,
+        quote="Цель измерима",
+        chunk_id="постановка-задачи:1",
+    )
+    provider = QueueProvider([incomplete, incomplete])
+
+    report = SemanticEngine(provider).run(make_bundle(), ("TSK-01",))
+
+    assert report.findings[0].diagnostic is DiagnosticCode.INVALID_SCHEMA
+    assert report.batches[0].attempts == 2
+
+
+def test_remaining_semantic_rules_are_explicitly_not_implemented() -> None:
+    deferred = sorted(SEMANTIC_RULE_IDS - IMPLEMENTED_RULE_IDS)
+    report = SemanticEngine(QueueProvider([])).run(make_bundle(), deferred)
+
+    assert len(deferred) == 19
+    assert [finding.rule_id for finding in report.findings] == deferred
     assert all(finding.diagnostic is DiagnosticCode.NOT_IMPLEMENTED for finding in report.findings)
     assert all(finding.status is SemanticStatus.NOT_APPLICABLE for finding in report.findings)
 

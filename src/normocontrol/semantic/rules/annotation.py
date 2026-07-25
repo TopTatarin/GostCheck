@@ -9,7 +9,9 @@ ANN_01 = RuleSpec(
     section_roles=("annotation",),
     requirement=(
         "Проверь шесть элементов аннотации: объект и проблема; актуальность и значимость; "
-        "цель; 3–4 задачи; результаты; структура ВКР. Для каждого верни element/state/evidence."
+        "цель; 3–4 задачи; результаты; структура ВКР. Для каждого верни element/state/evidence. "
+        "Все элементы present означают pass; любой weak или absent при достаточном тексте "
+        "означает warn."
     ),
     elements=("object_problem", "relevance", "goal", "tasks", "results", "structure"),
 )

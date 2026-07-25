@@ -23,6 +23,7 @@ from normocontrol.semantic.schemas import (
     DiagnosticCode,
     ElementAssessment,
     ElementState,
+    ResponseElementAssessment,
     SemanticFinding,
     SemanticReport,
     SemanticResponse,
@@ -36,7 +37,9 @@ RULE_SPECS: dict[str, RuleSpec] = {
 }
 
 
-def _sorted_elements(elements: tuple[ElementAssessment, ...]) -> tuple[ElementAssessment, ...]:
+def _sorted_elements(
+    elements: tuple[ResponseElementAssessment, ...],
+) -> tuple[ElementAssessment, ...]:
     return tuple(
         ElementAssessment(
             element=element.element,
@@ -123,7 +126,7 @@ class SemanticEngine:
         input_tokens = 0
         output_tokens = 0
         response: SemanticResponse | None = None
-        diagnostic = DiagnosticCode.INVALID_RESPONSE
+        diagnostic = DiagnosticCode.INVALID_SCHEMA
 
         for attempt in range(2):
             request_messages = (
@@ -133,19 +136,21 @@ class SemanticEngine:
             attempts += 1
             try:
                 raw = self._provider.request(request_messages, SemanticResponse)
-                response = SemanticResponse.model_validate(raw)
-                self._validate_response_for_batch(response, batch.spec)
-                output_tokens += estimate_tokens(response.model_dump_json())
+                candidate = SemanticResponse.model_validate(raw)
+                self._validate_response_for_batch(candidate, batch.spec)
+                response = candidate
+                output_tokens += estimate_tokens(candidate.model_dump_json())
                 break
-            except LlmUnavailableError:
-                diagnostic = (
-                    DiagnosticCode.PROVIDER_DISABLED
-                    if self._provider.name == "disabled"
-                    else DiagnosticCode.PROVIDER_ERROR
-                )
+            except LlmUnavailableError as error:
+                if self._provider.name == "disabled":
+                    diagnostic = DiagnosticCode.PROVIDER_DISABLED
+                elif "timed out" in str(error).casefold():
+                    diagnostic = DiagnosticCode.PROVIDER_TIMEOUT
+                else:
+                    diagnostic = DiagnosticCode.PROVIDER_ERROR
                 break
             except (LlmResponseError, ValidationError, TypeError, ValueError):
-                diagnostic = DiagnosticCode.INVALID_RESPONSE
+                diagnostic = DiagnosticCode.INVALID_SCHEMA
                 continue
             except LlmError:
                 diagnostic = DiagnosticCode.PROVIDER_ERROR
@@ -189,13 +194,9 @@ class SemanticEngine:
             actual = {element.element for element in response.elements}
             if actual != set(spec.elements):
                 raise ValueError("response elements do not match the rule specification")
-        if spec.rule_id in {"ANN-01", "INT-01"}:
-            for element in response.elements:
-                if (
-                    element.state in {ElementState.PRESENT, ElementState.WEAK}
-                    and not element.evidence
-                ):
-                    raise ValueError("present and weak ANN/INT elements require evidence")
+        for element in response.elements:
+            if element.state in {ElementState.PRESENT, ElementState.WEAK} and not element.evidence:
+                raise ValueError("present and weak elements require evidence")
 
     def _verified_finding(
         self,
@@ -234,7 +235,13 @@ class SemanticEngine:
     def _diagnostic_summary(code: DiagnosticCode) -> str:
         summaries = {
             DiagnosticCode.PROVIDER_DISABLED: "LLM-провайдер отключён; проверка не выполнялась.",
+            DiagnosticCode.PROVIDER_TIMEOUT: (
+                "Истёк тайм-аут LLM-провайдера; результат нельзя проверить."
+            ),
             DiagnosticCode.PROVIDER_ERROR: "LLM-провайдер недоступен; результат нельзя проверить.",
+            DiagnosticCode.INVALID_SCHEMA: (
+                "LLM дважды не вернул ответ по строгой схеме; результат нельзя проверить."
+            ),
             DiagnosticCode.INVALID_RESPONSE: (
                 "LLM дважды не вернул ответ по строгой схеме; результат нельзя проверить."
             ),

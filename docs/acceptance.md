@@ -15,11 +15,13 @@
 - [ ] `python scripts/release_check.py --out build/release-check.json` → `"ok": true`
 - [ ] `python -m pytest -q` зелёный
 - [ ] `ruff format --check .` / `ruff check .` / `mypy src` зелёные
+- [ ] `python scripts/evaluate_semantic.py --provider mock` → все три semantic rate равны 1.0
 - [ ] Coverage ≥ 85% в CI
 
 ## Безопасность / приватность
 
 - [ ] Нет tracked student PDF / API keys
+- [ ] `benchmark-results/` не tracked; semantic corpus содержит только synthetic-текст
 - [ ] `git grep` на секреты / `C:\Users\` / `samples/private/*.pdf` — пусто
 - [ ] LICENSE: внешний LaTeX-класс не публиковать шире, чем разрешила кафедра
       (MIT репозитория ≠ лицензия чужого `.cls`, если статус неизвестен)
