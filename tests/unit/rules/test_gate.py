@@ -10,6 +10,7 @@ from normocontrol.rules.gate import (
     blocks_merge,
     evaluate_gate,
     finding_blocks_merge,
+    finding_is_blocking_unverifiable,
     formal_exit_code,
 )
 
@@ -37,8 +38,13 @@ def make_finding(
         (RuleLayer.CLASS_SCRIPT, Severity.ERROR, FindingStatus.FAIL, True),
         (RuleLayer.SCRIPT, Severity.WARN, FindingStatus.FAIL, False),
         (RuleLayer.SCRIPT, Severity.ERROR, FindingStatus.WARN, False),
-        (RuleLayer.SCRIPT, Severity.ERROR, FindingStatus.UNVERIFIABLE, False),
+        (RuleLayer.SCRIPT, Severity.ERROR, FindingStatus.UNVERIFIABLE, True),
+        (RuleLayer.CLASS, Severity.ERROR, FindingStatus.UNVERIFIABLE, True),
+        (RuleLayer.CLASS_SCRIPT, Severity.ERROR, FindingStatus.UNVERIFIABLE, True),
+        (RuleLayer.SCRIPT, Severity.WARN, FindingStatus.UNVERIFIABLE, False),
         (RuleLayer.SCRIPT, Severity.ERROR, FindingStatus.PASS, False),
+        (RuleLayer.LLM, Severity.ERROR, FindingStatus.UNVERIFIABLE, False),
+        (RuleLayer.VISION, Severity.ERROR, FindingStatus.UNVERIFIABLE, False),
         (RuleLayer.LLM, Severity.ERROR, FindingStatus.WARN, False),
         (RuleLayer.VISION, Severity.INFO, FindingStatus.WARN, False),
     ],
@@ -86,4 +92,7 @@ def test_evaluate_gate_collects_blocking_findings() -> None:
 
 def test_formal_exit_code_matches_gate() -> None:
     assert formal_exit_code((make_finding(),)) is ExitCode.FORMAL_FAILURE
+    incomplete = make_finding(status=FindingStatus.UNVERIFIABLE)
+    assert finding_is_blocking_unverifiable(incomplete)
+    assert formal_exit_code((incomplete,)) is ExitCode.FORMAL_FAILURE
     assert formal_exit_code(()) is ExitCode.SUCCESS

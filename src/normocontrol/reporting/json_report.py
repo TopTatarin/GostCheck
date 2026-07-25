@@ -21,9 +21,14 @@ from normocontrol.domain import (
 )
 from normocontrol.reporting.fingerprint import finding_fingerprint, normalize_finding_payload
 from normocontrol.reporting.redaction import redact_structure
-from normocontrol.rules.gate import GateOutcome, evaluate_gate, is_formal_layer
+from normocontrol.rules.gate import (
+    GateOutcome,
+    evaluate_gate,
+    finding_is_blocking_unverifiable,
+    is_formal_layer,
+)
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 GITHUB_SUMMARY_MARKER = "<!-- normocontrol-report -->"
 Clock = Callable[[], datetime]
 
@@ -92,12 +97,15 @@ def count_findings(findings: Sequence[Finding]) -> dict[str, int]:
     warnings = 0
     llm_advisory = 0
     unverifiable = 0
+    blocking_unverifiable = 0
     approvals_required = 0
     for finding in findings:
         if "APPROVAL_REQUIRED" in finding.message.upper():
             approvals_required += 1
         if finding.status is FindingStatus.UNVERIFIABLE:
             unverifiable += 1
+            if finding_is_blocking_unverifiable(finding):
+                blocking_unverifiable += 1
         if finding.layer in {RuleLayer.LLM, RuleLayer.VISION}:
             if finding.status in {FindingStatus.WARN, FindingStatus.INFO}:
                 llm_advisory += 1
@@ -115,6 +123,7 @@ def count_findings(findings: Sequence[Finding]) -> dict[str, int]:
         "warnings": warnings,
         "llm_advisory": llm_advisory,
         "unverifiable": unverifiable,
+        "blocking_unverifiable": blocking_unverifiable,
         "approvals_required": approvals_required,
     }
 

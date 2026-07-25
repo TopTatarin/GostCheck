@@ -29,12 +29,17 @@ normocontrol run PATH \
 
 | Код | Значение |
 |----:|----------|
-| 0 | Успех или только advisory (warn/info/unverifiable) |
-| 2 | Formal gate fail (блокирующие error+fail) |
+| 0 | Успех или только неблокирующие advisory-результаты |
+| 2 | Formal gate fail: `error+fail` либо блокирующий `error+unverifiable` |
 | 3 | Ошибка конфигурации/входа (нет файла, неизвестный `--only`/`--profile`, lock) |
 | 4 | Внутренняя/инструментальная ошибка при `--fail-closed` |
 
 LLM/vision **никогда** не переводят прогон в код `2`.
+
+Для PDF-only входа FMT-01/02/03/05 выполняются по текстовому слою и геометрии
+PyMuPDF. FMT-04 может быть блокирующим `unverifiable`, поскольку абзацный отступ
+нельзя надёжно доказать по PDF. PDF без text layer возвращает `2`; повреждённый,
+зашифрованный или отсутствующий PDF отклоняется как ошибка входа с кодом `3`.
 
 ## `--only`
 
@@ -50,7 +55,7 @@ LLM/vision **никогда** не переводят прогон в код `2`
 
 ```text
 out/
-  report.json            # published schema v1.1 (header/counts/findings)
+  report.json            # published schema v1.2 (header/counts/findings)
   report.md              # Markdown с marker <!-- normocontrol-report -->
   summary.json           # GitHub-friendly summary + counts/gate
   run_state.json

@@ -154,9 +154,11 @@ def test_missing_latexmk_degraded_mode(tmp_path: Path) -> None:
         _request(tmp_path, DEMO_PASS),
         OrchestratorHooks(build_service=_MissingBuild()),
     )
-    assert report.exit_code in {ExitCode.SUCCESS, ExitCode.FORMAL_FAILURE}
+    assert report.exit_code is ExitCode.SUCCESS
     build = next(stage for stage in report.stages if stage.name == "build")
     assert any(item.status is FindingStatus.UNVERIFIABLE for item in build.findings)
+    formal = next(stage for stage in report.stages if stage.name == "formal")
+    assert all(item.rule_id != "SYS-03" for item in formal.findings)
 
 
 def test_final_severity_applies_ann03_and_rev01() -> None:

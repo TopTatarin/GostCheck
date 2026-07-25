@@ -21,6 +21,7 @@ from normocontrol.reporting.fingerprint import finding_fingerprint
 from normocontrol.reporting.json_report import (
     ReportMeta,
     build_published_report,
+    count_findings,
     load_report_schema,
     validate_published_report,
 )
@@ -118,16 +119,12 @@ def test_schema_validation_pass_fail_mixed_degraded(tmp_path: Path) -> None:
 def test_fingerprint_stable_after_absolute_path_change() -> None:
     first = _finding(
         path=r"C:\Users\a\GostCheck\tests\fixtures\demo\fail\main.tex",
-        evidence=(
-            Evidence(locator=r"C:\Users\a\GostCheck\tests\fixtures\demo\fail\main.tex:3"),
-        ),
+        evidence=(Evidence(locator=r"C:\Users\a\GostCheck\tests\fixtures\demo\fail\main.tex:3"),),
     )
     second = _finding(
         path=r"C:\Users\b\work\GostCheck\tests\fixtures\demo\fail\main.tex",
         evidence=(
-            Evidence(
-                locator=r"C:\Users\b\work\GostCheck\tests\fixtures\demo\fail\main.tex:3"
-            ),
+            Evidence(locator=r"C:\Users\b\work\GostCheck\tests\fixtures\demo\fail\main.tex:3"),
         ),
     )
     assert finding_fingerprint(first, repo_root=Path(r"C:\Users\a\GostCheck")) == (
@@ -227,6 +224,33 @@ def test_page_zero_is_omitted() -> None:
     )
     for item in published["findings"]:
         assert item.get("page") is None or item["page"] >= 1
+
+
+def test_blocking_unverifiable_count_is_separate_from_formal_errors() -> None:
+    incomplete = _finding(status=FindingStatus.UNVERIFIABLE)
+    advisory = _finding(
+        rule_id="ANN-01",
+        layer=RuleLayer.LLM,
+        status=FindingStatus.UNVERIFIABLE,
+    )
+
+    counts = count_findings((incomplete, advisory))
+
+    assert counts["formal_errors"] == 0
+    assert counts["unverifiable"] == 2
+    assert counts["blocking_unverifiable"] == 1
+
+
+def test_schema_1_1_remains_valid_without_new_counter() -> None:
+    published = build_published_report(
+        _report(exit_code=ExitCode.SUCCESS),
+        ReportMeta(commit_sha="x", repo_root=ROOT),
+        clock=lambda: datetime(2026, 7, 24, tzinfo=UTC),
+    )
+    published["schema_version"] = "1.1"
+    del published["counts"]["blocking_unverifiable"]
+
+    validate_published_report(published, schema=load_report_schema())
 
 
 def test_approval_required_grouped() -> None:

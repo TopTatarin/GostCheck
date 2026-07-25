@@ -132,3 +132,34 @@ def test_report_rejects_exit_code_inconsistent_with_formal_failures() -> None:
         RunReport(tool_version="0.1.0", stages=(failed_stage,))
     with pytest.raises(ValidationError, match="requires at least one"):
         RunReport(tool_version="0.1.0", exit_code=ExitCode.FORMAL_FAILURE)
+
+
+def test_report_accepts_exit_two_for_blocking_formal_unverifiable() -> None:
+    incomplete = make_finding(status=FindingStatus.UNVERIFIABLE)
+    stage = StageResult(name="formal", findings=(incomplete,))
+
+    report = RunReport(
+        tool_version="0.1.0",
+        exit_code=ExitCode.FORMAL_FAILURE,
+        stages=(stage,),
+    )
+
+    assert report.exit_code is ExitCode.FORMAL_FAILURE
+    with pytest.raises(ValidationError, match="require exit_code=2"):
+        RunReport(tool_version="0.1.0", stages=(stage,))
+
+
+def test_llm_unverifiable_never_requires_exit_two() -> None:
+    advisory = make_finding(
+        rule_id="ANN-01",
+        layer=RuleLayer.LLM,
+        severity=Severity.ERROR,
+        status=FindingStatus.UNVERIFIABLE,
+    )
+
+    report = RunReport(
+        tool_version="0.1.0",
+        stages=(StageResult(name="semantic", findings=(advisory,)),),
+    )
+
+    assert report.exit_code is ExitCode.SUCCESS

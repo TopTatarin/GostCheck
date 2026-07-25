@@ -8,7 +8,7 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "enum": ["1.0", "1.1"]
+      "enum": ["1.0", "1.1", "1.2"]
     },
     "header": {
       "type": "object",
@@ -50,6 +50,7 @@
         "warnings": {"type": "integer", "minimum": 0},
         "llm_advisory": {"type": "integer", "minimum": 0},
         "unverifiable": {"type": "integer", "minimum": 0},
+        "blocking_unverifiable": {"type": "integer", "minimum": 0},
         "approvals_required": {"type": "integer", "minimum": 0}
       }
     },
@@ -125,5 +126,22 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {"const": "1.2"}
+        },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "counts": {
+            "required": ["blocking_unverifiable"]
+          }
+        }
+      }
+    }
+  ]
 }

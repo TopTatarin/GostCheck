@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
+import fitz
 import pytest
 from typer.testing import CliRunner
 
@@ -142,3 +146,111 @@ def test_run_missing_source_exit_three(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == int(ExitCode.CONFIG_ERROR)
+
+
+def _run_pdf_subprocess(
+    pdf_path: Path,
+    out_dir: Path,
+    *,
+    only: str,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join((str(ROOT / "src"), str(ROOT)))
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "normocontrol.cli",
+            "--no-llm",
+            "run",
+            str(pdf_path),
+            "--config",
+            str(CONFIG),
+            "--rubric",
+            str(RUBRIC),
+            "--out",
+            str(out_dir),
+            "--only",
+            only,
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def test_pdf_only_subprocess_returns_real_zero_and_two_codes(tmp_path: Path) -> None:
+    passed = _run_pdf_subprocess(
+        ROOT / "tests" / "fixtures" / "pdf" / "fmt_pass.pdf",
+        tmp_path / "pass",
+        only="FMT-01",
+    )
+    failed = _run_pdf_subprocess(
+        ROOT / "tests" / "fixtures" / "pdf" / "fmt_wrong_font.pdf",
+        tmp_path / "wrong-font",
+        only="FMT-01",
+    )
+
+    assert passed.returncode == int(ExitCode.SUCCESS), passed.stdout + passed.stderr
+    assert failed.returncode == int(ExitCode.FORMAL_FAILURE), failed.stdout + failed.stderr
+
+
+@pytest.mark.parametrize(
+    ("filename", "rule_id"),
+    [
+        ("fmt_non_bold_heading.pdf", "FMT-02"),
+        ("fmt_margin_overflow.pdf", "FMT-05"),
+    ],
+)
+def test_pdf_fail_fixtures_return_two_in_subprocess(
+    tmp_path: Path,
+    filename: str,
+    rule_id: str,
+) -> None:
+    result = _run_pdf_subprocess(
+        ROOT / "tests" / "fixtures" / "pdf" / filename,
+        tmp_path / rule_id,
+        only=rule_id,
+    )
+
+    assert result.returncode == int(ExitCode.FORMAL_FAILURE), result.stdout + result.stderr
+
+
+def test_pdf_without_text_layer_returns_two_in_subprocess(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "no-text-layer.pdf"
+    document = fitz.open()
+    document.new_page(width=595, height=842)
+    document.save(pdf_path)
+    document.close()
+
+    result = _run_pdf_subprocess(pdf_path, tmp_path / "no-text-out", only="FMT-01")
+
+    assert result.returncode == int(ExitCode.FORMAL_FAILURE), result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("kind", ["corrupt", "encrypted"])
+def test_unreadable_pdf_never_returns_pass(
+    tmp_path: Path,
+    kind: str,
+) -> None:
+    pdf_path = tmp_path / f"{kind}.pdf"
+    if kind == "corrupt":
+        pdf_path.write_bytes(b"%PDF-1.7\nsynthetic corrupt payload\n")
+    else:
+        document = fitz.open()
+        page = document.new_page(width=595, height=842)
+        page.insert_text((100, 100), "Synthetic encrypted document")
+        document.save(
+            pdf_path,
+            encryption=fitz.PDF_ENCRYPT_AES_256,
+            owner_pw="synthetic-owner",
+            user_pw="synthetic-user",
+        )
+        document.close()
+
+    result = _run_pdf_subprocess(pdf_path, tmp_path / f"{kind}-out", only="FMT-01")
+
+    assert result.returncode == int(ExitCode.CONFIG_ERROR), result.stdout + result.stderr
+    assert str(tmp_path.resolve()) not in result.stdout + result.stderr

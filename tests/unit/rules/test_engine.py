@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from normocontrol.domain import Finding, FindingStatus, RuleLayer, Severity
+from normocontrol.extract.base import sha256_text
 from normocontrol.rubric.models import Capability
 from normocontrol.rubric.models import Severity as RubricSeverity
 from normocontrol.rules.base import RuleExecutionError
@@ -108,6 +109,63 @@ def test_pdf_only_marks_latex_required_rules_unverifiable() -> None:
 
     assert result.findings[0].status is FindingStatus.UNVERIFIABLE
     assert "required source unavailable" in result.findings[0].message
+    assert result.exit_code == 2
+
+
+def test_missing_bib_is_not_applicable_only_when_latex_has_no_bibliography() -> None:
+    registry = RuleRegistry()
+    registry.register(
+        StubFormalRule(
+            "BIB-02",
+            frozenset({SourceKind.LATEX_PROJECT, SourceKind.BIB_FILES}),
+        )
+    )
+    rubric = minimal_rubric(effective_rule("BIB-02"))
+    no_bibliography = execution_context(
+        rubric,
+        bundle=latex_bundle(),
+        latex=latex_project(),
+    )
+    cited_text = r"Synthetic text with \cite{source}."
+    cited_bundle = latex_bundle().model_copy(
+        update={
+            "text": cited_text,
+            "source_hash": sha256_text(cited_text),
+            "sections": (),
+        }
+    )
+    missing_bib = execution_context(
+        rubric,
+        bundle=cited_bundle,
+        latex=latex_project(),
+    )
+
+    not_applicable = FormalEngine(registry).run(no_bibliography)
+    incomplete = FormalEngine(registry).run(missing_bib)
+
+    assert not_applicable.findings[0].status is FindingStatus.NOT_APPLICABLE
+    assert not_applicable.exit_code == 0
+    assert incomplete.findings[0].status is FindingStatus.UNVERIFIABLE
+    assert incomplete.exit_code == 2
+
+
+def test_error_unverifiable_blocks_but_warn_unverifiable_does_not() -> None:
+    error_registry = RuleRegistry()
+    error_registry.mark_unsupported("SYS-01", reason="synthetic incomplete")
+    error_rubric = minimal_rubric(effective_rule("SYS-01"))
+    error_result = FormalEngine(error_registry).run(
+        execution_context(error_rubric, bundle=latex_bundle())
+    )
+
+    warn_registry = RuleRegistry()
+    warn_registry.mark_unsupported("SYS-01", reason="synthetic incomplete")
+    warn_rubric = minimal_rubric(effective_rule("SYS-01", severity=RubricSeverity.WARN))
+    warn_result = FormalEngine(warn_registry).run(
+        execution_context(warn_rubric, bundle=latex_bundle())
+    )
+
+    assert error_result.exit_code == 2
+    assert warn_result.exit_code == 0
 
 
 def test_expected_rule_execution_error_respects_fail_closed() -> None:

@@ -37,10 +37,7 @@ def effective_font_size_pt(context: ExecutionContext) -> float:
 
 def pdf_metrics_available(context: ExecutionContext) -> bool:
     """Return whether the bundle exposes a usable PDF text layer."""
-    bundle = context.bundle
-    if bundle is None or not bundle.spans:
-        return False
-    return "PDF_NO_TEXT_LAYER" not in bundle.warnings
+    return context.has_pdf_text_layer
 
 
 def _pass(rule: EffectiveRule, message: str) -> RuleRunOutcome:
@@ -84,6 +81,7 @@ def _unverifiable(rule: EffectiveRule, message: str) -> RuleRunOutcome:
 
 
 def _combine_class_pdf(
+    context: ExecutionContext,
     rule: EffectiveRule,
     *,
     class_ok: bool | None,
@@ -93,52 +91,56 @@ def _combine_class_pdf(
     pdf_fail_message: str,
     class_missing_message: str,
     pdf_missing_message: str,
-    pdf_optional: bool = False,
 ) -> RuleRunOutcome:
-    if class_ok is False:
+    class_required = context.latex is not None
+    pdf_required = context.pdf_only
+    if class_required and class_ok is False:
         return _fail(rule, class_fail_message)
     if pdf_ok is False:
         return _fail(rule, pdf_fail_message)
-    if class_ok is None:
+    if class_required and class_ok is None:
         return _unverifiable(rule, class_missing_message)
-    if pdf_ok is None:
-        if pdf_optional:
-            return _pass(rule, pass_message)
+    if pdf_required and pdf_ok is None:
         return _unverifiable(rule, pdf_missing_message)
     return _pass(rule, pass_message)
 
 
 class Fmt01BodyFontRule:
     rule_id = "FMT-01"
-    required_sources = frozenset({SourceKind.LATEX_PROJECT})
+    required_sources: frozenset[SourceKind] = frozenset()
 
     def supports(self, context: ExecutionContext, rule: EffectiveRule) -> bool:
         del rule
-        return context.latex is not None
+        return context.latex is not None or context.pdf_only
 
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
-        cls_text = class_file_text(context)
-        if cls_text is None:
-            return _unverifiable(rule, "защищённый .cls недоступен")
-        class_ok = (
-            re.search(r"\\RequirePackage\s*\{fontspec\}|\\usepackage\s*\{fontspec\}", cls_text)
-            is not None
-            and re.search(r"Times\s*New\s*Roman|TimesNewRoman", cls_text, re.IGNORECASE)
-            is not None
-        )
+        cls_text = class_file_text(context) if context.latex is not None else None
+        class_ok = None
+        if cls_text is not None:
+            class_ok = (
+                re.search(
+                    r"\\RequirePackage\s*\{fontspec\}|\\usepackage\s*\{fontspec\}",
+                    cls_text,
+                )
+                is not None
+                and re.search(r"Times\s*New\s*Roman|TimesNewRoman", cls_text, re.IGNORECASE)
+                is not None
+            )
         pdf_ok: bool | None = None
         if pdf_metrics_available(context):
             assert context.bundle is not None
             spans = body_spans(context.bundle.spans)
-            expected = effective_font_size_pt(context)
-            tnr_ratio = times_new_roman_ratio(spans)
-            size_ratio = font_size_match_ratio(
-                spans,
-                expected_pt=expected,
-                tolerance_pt=_FONT_SIZE_TOLERANCE_PT,
-            )
-            pdf_ok = tnr_ratio >= _BODY_FONT_RATIO_MIN and size_ratio >= _BODY_FONT_RATIO_MIN
+            if spans:
+                expected = effective_font_size_pt(context)
+                tnr_ratio = times_new_roman_ratio(spans)
+                size_ratio = font_size_match_ratio(
+                    spans,
+                    expected_pt=expected,
+                    tolerance_pt=_FONT_SIZE_TOLERANCE_PT,
+                )
+                pdf_ok = tnr_ratio >= _BODY_FONT_RATIO_MIN and size_ratio >= _BODY_FONT_RATIO_MIN
         return _combine_class_pdf(
+            context,
             rule,
             class_ok=class_ok,
             pdf_ok=pdf_ok,
@@ -152,20 +154,23 @@ class Fmt01BodyFontRule:
 
 class Fmt02HeadingBoldRule:
     rule_id = "FMT-02"
-    required_sources = frozenset({SourceKind.LATEX_PROJECT})
+    required_sources: frozenset[SourceKind] = frozenset()
 
     def supports(self, context: ExecutionContext, rule: EffectiveRule) -> bool:
         del rule
-        return context.latex is not None
+        return context.latex is not None or context.pdf_only
 
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
-        cls_text = class_file_text(context)
-        if cls_text is None:
-            return _unverifiable(rule, "защищённый .cls недоступен")
-        class_ok = re.search(
-            r"\\RequirePackage\s*\{titlesec\}|\\usepackage\s*\{titlesec\}|\\titleformat\b",
-            cls_text,
-        ) is not None
+        cls_text = class_file_text(context) if context.latex is not None else None
+        class_ok = (
+            None
+            if cls_text is None
+            else re.search(
+                r"\\RequirePackage\s*\{titlesec\}|\\usepackage\s*\{titlesec\}|\\titleformat\b",
+                cls_text,
+            )
+            is not None
+        )
         pdf_ok: bool | None = None
         if pdf_metrics_available(context):
             assert context.bundle is not None
@@ -176,6 +181,7 @@ class Fmt02HeadingBoldRule:
                 bold_ratio = sum(1 for span in headings if span_is_bold(span)) / len(headings)
                 pdf_ok = bold_ratio >= _BODY_FONT_RATIO_MIN
         return _combine_class_pdf(
+            context,
             rule,
             class_ok=class_ok,
             pdf_ok=pdf_ok,
@@ -189,20 +195,20 @@ class Fmt02HeadingBoldRule:
 
 class Fmt03LineSpacingRule:
     rule_id = "FMT-03"
-    required_sources = frozenset({SourceKind.LATEX_PROJECT})
+    required_sources: frozenset[SourceKind] = frozenset()
 
     def supports(self, context: ExecutionContext, rule: EffectiveRule) -> bool:
         del rule
-        return context.latex is not None
+        return context.latex is not None or context.pdf_only
 
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
-        cls_text = class_file_text(context)
-        if cls_text is None:
-            return _unverifiable(rule, "защищённый .cls недоступен")
-        class_ok = (
-            re.search(r"\\onehalfspacing\b", cls_text) is not None
-            or re.search(r"\\linespread\s*\{\s*1\.5\s*\}", cls_text) is not None
-        )
+        cls_text = class_file_text(context) if context.latex is not None else None
+        class_ok = None
+        if cls_text is not None:
+            class_ok = (
+                re.search(r"\\onehalfspacing\b", cls_text) is not None
+                or re.search(r"\\linespread\s*\{\s*1\.5\s*\}", cls_text) is not None
+            )
         pdf_ok: bool | None = None
         if pdf_metrics_available(context):
             assert context.bundle is not None
@@ -214,6 +220,7 @@ class Fmt03LineSpacingRule:
                 high = _LINE_SPACING_TARGET * (1.0 + _LINE_SPACING_TOLERANCE)
                 pdf_ok = low <= ratio <= high
         return _combine_class_pdf(
+            context,
             rule,
             class_ok=class_ok,
             pdf_ok=pdf_ok,
@@ -222,19 +229,23 @@ class Fmt03LineSpacingRule:
             pdf_fail_message="медиана межстрочного интервала вне 1,5±10%",
             class_missing_message="защищённый .cls недоступен",
             pdf_missing_message="PDF text layer недоступен для проверки интервала",
-            pdf_optional=True,
         )
 
 
 class Fmt04ParindentRule:
     rule_id = "FMT-04"
-    required_sources = frozenset({SourceKind.LATEX_PROJECT})
+    required_sources: frozenset[SourceKind] = frozenset()
 
     def supports(self, context: ExecutionContext, rule: EffectiveRule) -> bool:
         del rule
-        return context.latex is not None
+        return context.latex is not None or context.pdf_only
 
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
+        if context.latex is None:
+            return _unverifiable(
+                rule,
+                "абзацный отступ 12,5 мм нельзя надёжно доказать по геометрии PDF",
+            )
         cls_text = class_file_text(context)
         if cls_text is None:
             return _unverifiable(rule, "защищённый .cls недоступен")
@@ -249,31 +260,47 @@ class Fmt04ParindentRule:
 
 class Fmt05MarginsRule:
     rule_id = "FMT-05"
-    required_sources = frozenset({SourceKind.LATEX_PROJECT})
+    required_sources: frozenset[SourceKind] = frozenset()
 
     def supports(self, context: ExecutionContext, rule: EffectiveRule) -> bool:
         del rule
-        return context.latex is not None
+        return context.latex is not None or context.pdf_only
 
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
-        cls_text = class_file_text(context)
-        if cls_text is None:
-            return _unverifiable(rule, "защищённый .cls недоступен")
+        cls_text = class_file_text(context) if context.latex is not None else None
         margin_pattern = (
             r"left\s*=\s*30\s*mm.*right\s*=\s*10\s*mm.*top\s*=\s*20\s*mm.*bottom\s*=\s*20\s*mm"
         )
-        class_ok = re.search(margin_pattern, cls_text, re.IGNORECASE | re.DOTALL) is not None
+        class_ok = (
+            None
+            if cls_text is None
+            else re.search(margin_pattern, cls_text, re.IGNORECASE | re.DOTALL) is not None
+        )
         pdf_ok: bool | None = None
         if pdf_metrics_available(context) and context.bundle is not None and context.bundle.pages:
             violations: list[int] = []
+            measured_pages = 0
+            measurable_spans = body_spans(context.bundle.spans)
             for page in context.bundle.pages:
-                bbox = page_text_bbox(context.bundle.spans, page.number)
+                bbox = page_text_bbox(measurable_spans, page.number)
                 if bbox is None:
                     continue
-                if not bbox_within_margins(bbox, page):
+                measured_pages += 1
+                metric_page = page
+                if page.rotation in {90, 270}:
+                    metric_page = page.model_copy(
+                        update={
+                            "width": page.height,
+                            "height": page.width,
+                            "rotation": 0,
+                        }
+                    )
+                if not bbox_within_margins(bbox, metric_page):
                     violations.append(page.number)
-            pdf_ok = not violations
+            if measured_pages:
+                pdf_ok = not violations
         return _combine_class_pdf(
+            context,
             rule,
             class_ok=class_ok,
             pdf_ok=pdf_ok,
