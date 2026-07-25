@@ -4,7 +4,31 @@
 
 - Python **3.12**
 - Git
-- Optional: TeX Live (`latexmk`, `chktex`), Ollama
+- Required for the same formal gate as CI: the TeX packages below
+- Optional: Ollama
+
+On Ubuntu 24.04, install the explicit CI toolchain:
+
+```bash
+sudo apt-get update
+sudo apt-get install --no-install-recommends -y \
+  biber \
+  chktex \
+  fonts-texgyre \
+  latexmk \
+  texlive-bibtex-extra \
+  texlive-fonts-recommended \
+  texlive-lang-cyrillic \
+  texlive-latex-extra \
+  texlive-xetex
+command -v latexmk chktex xelatex biber
+kpsewhich biblatex-gost.sty
+fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
+```
+
+CI does not install proprietary Times New Roman. Synthetic classes keep the
+formal Times New Roman declaration but compile with TeX Gyre Termes through
+`\IfFontExistsTF` when Times New Roman is absent.
 
 ## Install
 
@@ -26,6 +50,6 @@ normocontrol run tests/fixtures/demo/pass --provider disabled --out build/demo-p
 bash demo/run_demo.sh --mode dry-run
 ```
 
-Docker/TeX Live are optional for the PoC formal-gate on GitHub-hosted runners:
-missing `latexmk` is marked degraded and must not block the documented demo
-fixtures that run extraction without a full TeX install.
+The GitHub `formal-gate` always installs and verifies this TeX toolchain.
+Missing `latexmk`, `chktex`, XeLaTeX, `biber`, `biblatex-gost`, or TeX Gyre
+Termes is a hard setup failure rather than a degraded success.

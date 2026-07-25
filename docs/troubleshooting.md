@@ -2,9 +2,42 @@
 
 ## latexmk / chktex missing
 
-**Symptom:** `doctor` shows not found; CI `build-latex` degraded.  
-**Action:** Install TeX Live / MiKTeX or ignore for fixture-only formal runs.
-Formal-gate on demo fixtures does not require a green latexmk on the runner.
+**Symptom:** `doctor` shows not found, or CI fails during TeX setup.
+**Action:** Install the package set from [setup-linux.md](setup-linux.md).
+`formal-gate` requires `latexmk`, `chktex`, XeLaTeX, and `biber`; none of these
+tools has a degraded-success path.
+
+## LaTeX compilation or biber fails
+
+**Symptom:** `formal-gate` stops before `normocontrol run`; the artifact contains
+`latexmk.log`, `.log`, or `.blg`.
+**Action:** Download `normocontrol-report-<sha>` and inspect `build/latex/`.
+An absent `.sty` or a biber parse error is blocking. Reproduce with
+`latexmk -xelatex -Werror -interaction=nonstopmode -halt-on-error -file-line-error
+-outdir=build/latex/local main.tex`.
+
+## PDF exists but references are unresolved
+
+**Symptom:** `latexmk` creates a PDF but `formal-gate` reports a blocking
+unresolved reference or citation.
+**Action:** Fix the missing `\label`, citation key, or bibliography input.
+The gate already lets `latexmk` perform the necessary reruns; remaining
+undefined-reference diagnostics are therefore blocking.
+
+## ChkTeX blocks formal-gate
+
+**Symptom:** `build/latex/formal-pass/chktex.log` contains a diagnostic and
+`formal-gate` is red.
+**Action:** Run `chktex -q path/to/main.tex`, fix the reported source issue, and
+rerun the gate. Blocking diagnostics are not suppressed with `|| true`.
+
+## Times New Roman absent on CI
+
+**Symptom:** the synthetic fixture runs on a host without Times New Roman.
+**Action:** No proprietary font is needed. The synthetic `.cls` keeps the
+Times New Roman declaration for formal inspection and falls back to TeX Gyre
+Termes at compile time via `\IfFontExistsTF`. If fallback lookup fails, verify
+`fc-match "TeX Gyre Termes"` and install `fonts-texgyre`.
 
 ## Missing font / PDF geometry
 

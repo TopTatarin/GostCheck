@@ -5,9 +5,35 @@ inputs:
     description: Python version
     required: false
     default: "3.12"
+  install-tex:
+    description: Install the reproducible TeX toolchain used by LaTeX CI jobs
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
+    - name: Install TeX toolchain
+      if: ${{ inputs.install-tex == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends -y \
+          biber \
+          chktex \
+          fonts-texgyre \
+          latexmk \
+          texlive-bibtex-extra \
+          texlive-fonts-recommended \
+          texlive-lang-cyrillic \
+          texlive-latex-extra \
+          texlive-xetex
+        command -v latexmk
+        command -v chktex
+        command -v xelatex
+        command -v biber
+        kpsewhich biblatex-gost.sty
+        fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
     - name: Set up Python
       uses: actions/setup-python@v7
       with:

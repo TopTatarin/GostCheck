@@ -2,7 +2,9 @@
 \ProvidesClass{gostcheck-vkr}[2025/01/01 GostCheck fixture class]
 \LoadClass{article}
 \RequirePackage{fontspec}
-\setmainfont{Times New Roman}
+\IfFontExistsTF{Times New Roman}
+  {\setmainfont{Times New Roman}}
+  {\setmainfont{TeX Gyre Termes}}
 \RequirePackage{titlesec}
 \RequirePackage{setspace}
 \onehalfspacing
