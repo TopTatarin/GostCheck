@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import unicodedata
 from dataclasses import dataclass
 
@@ -11,10 +10,42 @@ from normocontrol.semantic.schemas import EvidenceQuote, VerifiedEvidence
 
 
 def normalize_quote(value: str) -> str:
-    """Normalize Unicode, case and whitespace without semantic fuzzy matching."""
-    normalized = unicodedata.normalize("NFC", value).casefold().replace("ё", "е")
-    normalized = re.sub(r"[\u00ad\u200b-\u200d\ufeff]", "", normalized)
-    return " ".join(normalized.split())
+    """Apply canonical Unicode composition without fuzzy textual matching."""
+    return unicodedata.normalize("NFC", value)
+
+
+def _canonical_exact_span(text: str, quote: str) -> tuple[int, int] | None:
+    """Locate one continuous canonically equivalent substring.
+
+    Case, punctuation, spacing, visually similar letters and invisible characters remain
+    significant.
+    Prefix normalization maps an NFC match back to the original source offsets, including
+    source text stored in decomposed Unicode form.
+    """
+    target = normalize_quote(quote)
+    if not target:
+        return None
+
+    direct_start = text.find(quote)
+    if direct_start >= 0:
+        return direct_start, direct_start + len(quote)
+
+    normalized_text = normalize_quote(text)
+    normalized_start = normalized_text.find(target)
+    while normalized_start >= 0:
+        normalized_end = normalized_start + len(target)
+        boundaries: dict[int, list[int]] = {}
+        for index in range(len(text) + 1):
+            normalized_length = len(normalize_quote(text[:index]))
+            boundaries.setdefault(normalized_length, []).append(index)
+        starts = tuple(reversed(boundaries.get(normalized_start, ())))
+        ends = tuple(reversed(boundaries.get(normalized_end, ())))
+        for start in starts:
+            for end in ends:
+                if end >= start and normalize_quote(text[start:end]) == target:
+                    return start, end
+        normalized_start = normalized_text.find(target, normalized_start + 1)
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,14 +83,16 @@ class EvidenceVerifier:
             if chunk is None:
                 errors.append("chunk_not_allowed")
                 continue
-            if not normalized or normalized not in normalize_quote(chunk.text):
+            span = _canonical_exact_span(chunk.text, item.quote)
+            if span is None:
                 errors.append("quote_not_found")
                 continue
+            resolved = chunk.resolve_quote(*span, max_chars=400)
             verified.append(
                 VerifiedEvidence(
                     chunk_id=item.chunk_id,
                     quote=item.quote,
-                    locator=chunk.quote_locator,
+                    locator=resolved.locator,
                 )
             )
         ordered = tuple(

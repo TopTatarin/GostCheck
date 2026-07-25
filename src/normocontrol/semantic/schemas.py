@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -57,7 +57,12 @@ SEMANTIC_RULE_IDS = frozenset(
 class StrictModel(BaseModel):
     """Immutable model which rejects unknown generated fields."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        validate_by_alias=True,
+        validate_by_name=True,
+    )
 
 
 class SemanticStatus(StrEnum):
@@ -86,6 +91,8 @@ class DiagnosticCode(StrEnum):
     SECTION_MISSING = "section_missing"
     PROVIDER_DISABLED = "provider_disabled"
     PROVIDER_ERROR = "provider_error"
+    PROVIDER_TIMEOUT = "provider_timeout"
+    INVALID_SCHEMA = "invalid_schema"
     INVALID_RESPONSE = "invalid_response"
     INVALID_EVIDENCE = "invalid_evidence"
 
@@ -103,8 +110,8 @@ def _reject_markup(value: str) -> str:
 class EvidenceQuote(StrictModel):
     """A short model-supplied quote that still has to pass source verification."""
 
-    chunk_id: NonEmptyString
-    quote: NonEmptyString
+    chunk_id: Annotated[NonEmptyString, Field(alias="i")]
+    quote: Annotated[NonEmptyString, Field(alias="q", max_length=64)]
 
     @field_validator("quote")
     @classmethod
@@ -127,15 +134,46 @@ class ElementAssessment(StrictModel):
     evidence: tuple[EvidenceQuote, ...] = ()
 
 
+class SupportedElementAssessment(StrictModel):
+    """Generated present/weak element with exactly one verifiable quote."""
+
+    element: Annotated[NonEmptyString, Field(alias="n")]
+    state: Annotated[Literal[ElementState.PRESENT, ElementState.WEAK], Field(alias="s")]
+    evidence: Annotated[
+        tuple[EvidenceQuote, ...],
+        Field(alias="q", min_length=1, max_length=1),
+    ]
+
+
+class UnsupportedElementAssessment(StrictModel):
+    """Generated absent/not-applicable element which cannot invent evidence."""
+
+    element: Annotated[NonEmptyString, Field(alias="n")]
+    state: Annotated[
+        Literal[ElementState.ABSENT, ElementState.NOT_APPLICABLE],
+        Field(alias="s"),
+    ]
+    evidence: Annotated[tuple[EvidenceQuote, ...], Field(alias="q", max_length=0)]
+
+
+type ResponseElementAssessment = Annotated[
+    SupportedElementAssessment | UnsupportedElementAssessment,
+    Field(discriminator="state"),
+]
+
+
 class SemanticResponse(StrictModel):
     """The only response schema requested from an LLM."""
 
-    rule_id: RuleId
-    status: SemanticStatus
-    confidence: float = Field(strict=True, ge=0, le=1, allow_inf_nan=False)
-    summary: NonEmptyString = Field(max_length=500)
-    evidence: tuple[EvidenceQuote, ...] = ()
-    elements: tuple[ElementAssessment, ...] = ()
+    rule_id: Annotated[RuleId, Field(alias="r")]
+    status: Annotated[SemanticStatus, Field(alias="s")]
+    confidence: Annotated[
+        float,
+        Field(alias="c", strict=True, ge=0, le=1, allow_inf_nan=False),
+    ]
+    summary: Annotated[NonEmptyString, Field(alias="m", max_length=500)]
+    evidence: Annotated[tuple[EvidenceQuote, ...], Field(alias="q")]
+    elements: Annotated[tuple[ResponseElementAssessment, ...], Field(alias="e")]
 
     @field_validator("rule_id")
     @classmethod

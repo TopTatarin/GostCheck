@@ -34,9 +34,56 @@ def test_quote_longer_than_ten_words_is_rejected() -> None:
         "TSK-01",
         (),
         status="not_applicable",
-        quote="один два три четыре пять шесть семь восемь девять десять одиннадцать",
+        quote="а б в г д е ж з и к л",
         chunk_id="task:1",
     )
 
     with pytest.raises(ValidationError, match="at most 10 words"):
         SemanticResponse.model_validate(payload)
+
+
+def test_model_cannot_invent_an_evidence_locator() -> None:
+    payload = response_payload(
+        "TSK-01",
+        (),
+        status="not_applicable",
+        quote="точная цитата",
+        chunk_id="task:1",
+    )
+    evidence = payload["evidence"]
+    assert isinstance(evidence, list)
+    evidence[0]["locator"] = "invented:1"
+
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        SemanticResponse.model_validate(payload)
+
+
+def test_compact_llm_wire_aliases_preserve_public_field_names() -> None:
+    public_payload = response_payload(
+        "TSK-01",
+        (),
+        status="not_applicable",
+    )
+    response = SemanticResponse.model_validate(public_payload)
+
+    compact = response.model_dump(mode="json", by_alias=True)
+    restored = SemanticResponse.model_validate(compact)
+
+    assert set(compact) == {"r", "s", "c", "m", "q", "e"}
+    assert restored == response
+    assert set(response.model_dump()) == {
+        "rule_id",
+        "status",
+        "confidence",
+        "summary",
+        "evidence",
+        "elements",
+    }
+    assert set(SemanticResponse.model_json_schema()["properties"]) == {
+        "r",
+        "s",
+        "c",
+        "m",
+        "q",
+        "e",
+    }

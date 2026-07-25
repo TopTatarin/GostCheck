@@ -111,12 +111,20 @@ class BatchPlanner:
     """Select only rule-relevant sections and a hard-bounded subset of their chunks."""
 
     def plan(self, bundle: DocumentBundle, spec: RuleSpec) -> RuleBatch:
+        def has_body(section: Section) -> bool:
+            section_text = bundle.text[section.char_start : section.char_end]
+            lines = section_text.splitlines()
+            if lines and _normalize(lines[0]) == _normalize(section.title):
+                section_text = "\n".join(lines[1:])
+            return bool(section_text.strip())
+
         selected_sections = tuple(
             sorted(
                 (
                     section
                     for section in bundle.sections
                     if any(_matches_role(section, role) for role in spec.section_roles)
+                    and has_body(section)
                 ),
                 key=lambda item: (item.char_start, item.section_id),
             )
