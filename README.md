@@ -79,6 +79,30 @@ build → formal → semantic(advisory) → aggregate(report.json / report.md)
 [docs/github-actions.md](docs/github-actions.md),
 [docs/data-flow.md](docs/data-flow.md).
 
+## Состояние проекта
+
+Готово:
+
+- CLI для проверки LaTeX-проекта или PDF с формализованными кодами выхода;
+- формальные правила, блокирующий `formal-gate`, JSON- и Markdown-отчёты;
+- локальный semantic advisory через Ollama и отключаемые провайдеры;
+- unit-, integration-, e2e- и live-тесты, Ruff, strict mypy и CI;
+- защита персональных данных: реальные ВКР, отчёты, ключи и локальные настройки
+  исключены из git.
+
+До релизной приёмки необходимо:
+
+- устранить ложные срабатывания PDF-проверок шрифта и нижнего поля на реальных ВКР;
+- закрыть расхождения эталонного formal-корпуса для `BIB-03`, `BIB-04`,
+  `REV-02`, `REV-03` и `REV-04`;
+- реализовать оставшиеся semantic-правила, обозначенные как `not_implemented`;
+- подключить безопасный workflow проверки реальной ВКР в приватном репозитории или
+  на self-hosted runner;
+- после исправлений повторить приёмочный прогон на контрольных PDF.
+
+Подробные задания, тесты, corner cases и Git-команды собраны в
+[docs/remediation-prompts.md](docs/remediation-prompts.md).
+
 ## Границы автоматизации
 
 **Делает:** формальный gate, отчёты, PR-comment, advisory semantic (opt-in).  
@@ -93,6 +117,7 @@ build → formal → semantic(advisory) → aggregate(report.json / report.md)
 | [SECURITY.md](SECURITY.md) | Угрозы, секреты, runner |
 | [CHANGELOG.md](CHANGELOG.md) | История релизов |
 | [docs/acceptance.md](docs/acceptance.md) | Чеклист v0.1.0 + tag |
+| [docs/remediation-prompts.md](docs/remediation-prompts.md) | Промпты и Git-команды для устранения выявленных пробелов |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Симптомы → действия |
 | [docs/privacy.md](docs/privacy.md) | Персональные данные |
 

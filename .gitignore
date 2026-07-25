@@ -37,9 +37,11 @@ artifacts/
 # Python environments and generated packages
 .venv/
 .venv312/
+.venv-*/
 venv/
 env/
 .tools/
+__pypackages__/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -49,11 +51,18 @@ __pycache__/
 .eggs/
 dist/
 site/
+wheelhouse/
+*.whl
 
 # Test, type-checker and linter output
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.pyre/
+.pytype/
+.pyright/
+.dmypy.json
+dmypy.json
 .hypothesis/
 .tox/
 .nox/
@@ -62,6 +71,8 @@ site/
 coverage.xml
 htmlcov/
 junit.xml
+test-results/
+allure-results/
 
 # Normocontrol runtime output and logs
 build/
@@ -69,9 +80,25 @@ output/
 tmp/
 temp/
 logs/
+audit-results/
+release-results/
 *.log
 *.jsonl
 benchmark-results/
+
+# Temporary, backup, profiling and local database files
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.prof
+*.lprof
+*.pid
+*.sqlite
+*.sqlite3
+*.db
+pytestdebug.log
 
 # Local LLM weights and caches
 models/
@@ -92,13 +119,25 @@ models/
 *.fls
 *.lof
 *.lot
+*.nav
 *.out
 *.run.xml
+*.snm
 *.synctex.gz
 *.toc
+*.vrb
 *.xdv
 *.dvi
 *.ps
+*.acn
+*.acr
+*.alg
+*.glg
+*.glo
+*.gls
+*.ist
+*.xdy
+_minted-*/
 
 # Editors and operating systems
 .idea/
@@ -113,8 +152,9 @@ Desktop.ini
 $RECYCLE.BIN/
 
 # Local tooling
+.codex-worktrees/
 .cache/
+.uv/
 .uv-cache/
 .python-version
 pip-wheel-metadata/
-
