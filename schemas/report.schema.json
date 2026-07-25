@@ -30,7 +30,10 @@
         "gate_status": {"type": "string", "enum": ["pass", "fail", "error"]},
         "degraded": {"type": "boolean"},
         "approvals_required": {"type": "boolean"},
-        "generated_at": {"type": "string", "minLength": 1},
+        "generated_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
         "artifact_name": {"type": ["string", "null"]}
       }
     },

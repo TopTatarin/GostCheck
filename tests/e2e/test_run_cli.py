@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import fitz
@@ -68,6 +69,7 @@ def test_run_help_lists_options(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_run_pass_demo_exit_zero(tmp_path: Path) -> None:
     out = tmp_path / "pass"
+    before = datetime.now(UTC).replace(microsecond=0)
     result = runner.invoke(
         cli.app,
         [
@@ -82,11 +84,16 @@ def test_run_pass_demo_exit_zero(tmp_path: Path) -> None:
             str(out),
         ],
     )
+    after = datetime.now(UTC).replace(microsecond=0)
     assert result.exit_code == int(ExitCode.SUCCESS), result.stdout + result.stderr
     published = json.loads((out / "report.json").read_text(encoding="utf-8"))
     validate_published_report(published, schema=load_report_schema())
     assert published["exit_code"] == 0
     assert published["header"]["gate_status"] == "pass"
+    generated_at = published["header"]["generated_at"]
+    generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+    assert before <= generated <= after
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", generated_at)
     assert (out / "report.md").is_file()
     assert (out / "summary.json").is_file()
 
@@ -225,9 +232,13 @@ def test_pdf_without_text_layer_returns_two_in_subprocess(tmp_path: Path) -> Non
     document.save(pdf_path)
     document.close()
 
-    result = _run_pdf_subprocess(pdf_path, tmp_path / "no-text-out", only="FMT-01")
+    out_dir = tmp_path / "no-text-out"
+    result = _run_pdf_subprocess(pdf_path, out_dir, only="FMT-01")
 
     assert result.returncode == int(ExitCode.FORMAL_FAILURE), result.stdout + result.stderr
+    published = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+    assert published["header"]["degraded"] is True
+    assert published["counts"]["blocking_unverifiable"] > 0
 
 
 @pytest.mark.parametrize("kind", ["corrupt", "encrypted"])
