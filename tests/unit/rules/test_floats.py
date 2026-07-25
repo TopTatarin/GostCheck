@@ -187,10 +187,7 @@ def test_mth01_passes_numbered_equation_section(tmp_path: Path) -> None:
         + "\nallowed_renewcommand: []\n",
         encoding="utf-8",
     )
-    body = (
-        "\\section{Математическая модель}\n"
-        "\\begin{equation}a=1\\end{equation}\n"
-    )
+    body = "\\section{Математическая модель}\n\\begin{equation}a=1\\end{equation}\n"
     (project / "main.tex").write_text(
         f"\\documentclass{{gostcheck-vkr}}\n\\begin{{document}}\n{body}\\end{{document}}\n",
         encoding="utf-8",

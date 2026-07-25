@@ -13,6 +13,7 @@ from normocontrol.rubric.expansion import expand_rubric
 from normocontrol.rubric.loader import load_config, load_rubric
 from normocontrol.rules.context import ExecutionContext, LatexProject
 from normocontrol.rules.engine import FormalEngine
+from normocontrol.rules.gate import formal_exit_code
 from normocontrol.rules.register import default_formal_registry
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -92,14 +93,14 @@ def _statuses(findings, rule_id: str) -> tuple[FindingStatus, ...]:
 
 def test_pass_pdf_and_class_passes_fmt_rules(tmp_path: Path) -> None:
     pdf_path = _pass_pdf(tmp_path / "pass.pdf")
-    result, findings = _run_with_pdf(pdf_path)
+    _, findings = _run_with_pdf(pdf_path)
     blocking = tuple(
         finding
         for finding in findings
         if finding.status is FindingStatus.FAIL and finding.severity.value == "error"
     )
     assert not blocking, [(item.rule_id, item.message) for item in blocking]
-    assert result.exit_code == int(ExitCode.SUCCESS)
+    assert formal_exit_code(findings) is ExitCode.SUCCESS
 
 
 @pytest.mark.parametrize(

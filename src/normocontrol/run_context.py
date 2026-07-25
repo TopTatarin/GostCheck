@@ -50,8 +50,7 @@ class OnlyFilter:
             return True
         upper = rule_id.upper()
         return any(
-            upper == prefix or upper.startswith(f"{prefix}-")
-            for prefix in self.rule_prefixes
+            upper == prefix or upper.startswith(f"{prefix}-") for prefix in self.rule_prefixes
         )
 
 

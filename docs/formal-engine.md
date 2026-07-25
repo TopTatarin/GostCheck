@@ -1,8 +1,10 @@
 # Formal rule engine
 
 The formal engine executes deterministic `class` and `script` rubric rules. It is
-the blocking path for merge gates: only findings with `severity=error`,
-`status=fail`, and a formal layer can produce exit code `2`.
+the blocking path for merge gates: findings with `severity=error` and either
+`status=fail` or `status=unverifiable` on a formal layer produce exit code `2`.
+An `unverifiable` result is reported as an incomplete check, not as a confirmed
+violation.
 
 ## Components
 
@@ -33,12 +35,33 @@ Blocking finding:
 
 - layer is `class`, `script`, or `class+script`
 - severity is `error`
-- status is `fail`
+- status is `fail` (confirmed violation) or `unverifiable` (blocking incomplete check)
 
-Non-blocking: `warn`, `info`, `unverifiable`, `not_applicable`, advisory layers.
+Non-blocking: warning/info severities, `not_applicable`, and all advisory
+LLM/vision `unverifiable` findings.
 
 With `fail_closed=true`, isolated tool errors become blocking `fail` findings.
 With `fail_closed=false`, the same errors are reported as `unverifiable` warnings.
+
+Published schema `1.2` keeps separate `formal_errors` and
+`blocking_unverifiable` counters. The general `unverifiable` counter still
+contains both blocking formal and non-blocking advisory results.
+
+## PDF-only formatting
+
+For a PDF input with a usable text layer, FMT-01, FMT-02, FMT-03, and FMT-05
+run directly against PyMuPDF `DocumentBundle` page/span geometry. They do not
+require a `LatexProject`:
+
+- FMT-01 checks Times New Roman-compatible font names and approved size.
+- FMT-02 checks detected headings for bold typography.
+- FMT-03 estimates the line-spacing ratio from baselines.
+- FMT-05 checks measurable page text against configured margins.
+
+FMT-04 remains `unverifiable` for PDF-only input because paragraph indentation
+cannot be established reliably from span geometry. A PDF without a text layer
+therefore produces a blocking incomplete result rather than PASS. Corrupt and
+password-protected PDFs are rejected during extraction.
 
 ## Fingerprints
 

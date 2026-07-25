@@ -144,6 +144,7 @@ class Orchestrator:
                     pdf_path=pdf_path,
                     cache=cache,
                     base_key=base_key,
+                    build_meta=build_meta,
                     state=state,
                 )
                 stages.append(formal_stage)
@@ -203,9 +204,7 @@ class Orchestrator:
                     exit_code=exit_code,
                     stages=tuple(stages),
                 )
-                all_findings = tuple(
-                    finding for stage in stages for finding in stage.findings
-                )
+                all_findings = tuple(finding for stage in stages for finding in stage.findings)
                 publish_reports(
                     report,
                     request.out_dir,
@@ -217,11 +216,7 @@ class Orchestrator:
                         ),
                         profile=config.work_profile.value,
                         rubric_version=rubric.meta.version,
-                        model_id=(
-                            None
-                            if request.no_llm
-                            else (request.provider or "disabled")
-                        ),
+                        model_id=(None if request.no_llm else (request.provider or "disabled")),
                         degraded=bool(build_meta.get("degraded")),
                         approvals_required=any(
                             "APPROVAL_REQUIRED" in finding.message.upper()
@@ -388,11 +383,7 @@ class Orchestrator:
                 )
                 meta["degraded"] = True
             else:
-                status = (
-                    FindingStatus.FAIL
-                    if request.fail_closed
-                    else FindingStatus.UNVERIFIABLE
-                )
+                status = FindingStatus.FAIL if request.fail_closed else FindingStatus.UNVERIFIABLE
                 severity = Severity.ERROR if request.fail_closed else Severity.WARN
                 findings.append(
                     Finding(
@@ -440,13 +431,24 @@ class Orchestrator:
         pdf_path: Path | None,
         cache: StageCache,
         base_key: dict[str, str],
+        build_meta: dict[str, Any],
         state: RunState,
     ) -> tuple[StageResult, tuple[Finding, ...]]:
         started = self._hooks.clock()
-        filtered = filter_rubric(rubric, request.only.allows_rule)
+        build_tool_missing = build_meta.get("latexmk_status") == LatexBuildStatus.TOOL_MISSING.value
+        filtered = filter_rubric(
+            rubric,
+            lambda rule_id: (
+                request.only.allows_rule(rule_id)
+                and not (build_tool_missing and rule_id == "SYS-03")
+            ),
+        )
         key = CacheKeyParts(
             stage=StageName.FORMAL.value,
-            model_hash=hash_text(f"fail_closed={request.fail_closed}"),
+            model_hash=hash_text(
+                f"formal-v2:fail_closed={request.fail_closed}:"
+                f"build_tool_missing={build_tool_missing}"
+            ),
             **base_key,
         )
         cached = cache.get(key)
@@ -565,9 +567,7 @@ class Orchestrator:
                 provider,
                 model_id=llm_config.model or provider.name,
             ).run(bundle)
-            selected = [
-                item for item in report.findings if request.only.allows_rule(item.rule_id)
-            ]
+            selected = [item for item in report.findings if request.only.allows_rule(item.rule_id)]
             findings = tuple(semantic_finding_to_domain(item) for item in selected)
         except Exception as error:
             finding = Finding(
@@ -612,15 +612,10 @@ class Orchestrator:
     ) -> RunReport:
         state.canceled = True
         state.messages.append("run canceled")
+        findings = tuple(finding for stage in stages for finding in stage.findings)
         report = RunReport(
             tool_version=request.tool_version,
-            exit_code=ExitCode.SUCCESS
-            if not any(
-                finding.status is FindingStatus.FAIL
-                for stage in stages
-                for finding in stage.findings
-            )
-            else ExitCode.FORMAL_FAILURE,
+            exit_code=formal_exit_code(findings),
             stages=tuple(stages),
         )
         atomic_write_json(

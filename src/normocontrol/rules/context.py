@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -67,4 +68,33 @@ class ExecutionContext:
             return False
         return self.pdf_path is not None or (
             self.bundle is not None and self.bundle.source_format is SourceFormat.PDF
+        )
+
+    @property
+    def has_pdf_text_layer(self) -> bool:
+        """Return whether PDF typography and geometry can be measured."""
+        return (
+            self.bundle is not None
+            and self.bundle.source_format is SourceFormat.PDF
+            and bool(self.bundle.spans)
+            and "PDF_NO_TEXT_LAYER" not in self.bundle.warnings
+        )
+
+    @property
+    def bibliography_expected(self) -> bool:
+        """Return whether LaTeX input declares citations or a bibliography resource."""
+        if self.bib_paths:
+            return True
+        if (
+            self.latex is None
+            or self.bundle is None
+            or self.bundle.source_format is not SourceFormat.LATEX
+        ):
+            return False
+        return (
+            re.search(
+                r"\\(?:addbibresource|bibliography|cite[a-zA-Z]*)\b",
+                self.bundle.text,
+            )
+            is not None
         )

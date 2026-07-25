@@ -43,7 +43,16 @@ def finding_blocks_merge(finding: Finding) -> bool:
         return False
     if finding.severity is not Severity.ERROR:
         return False
-    return finding.status is FindingStatus.FAIL
+    return finding.status in {FindingStatus.FAIL, FindingStatus.UNVERIFIABLE}
+
+
+def finding_is_blocking_unverifiable(finding: Finding) -> bool:
+    """Return whether a formal incomplete check blocks without proving a violation."""
+    return (
+        is_formal_layer(finding.layer)
+        and finding.severity is Severity.ERROR
+        and finding.status is FindingStatus.UNVERIFIABLE
+    )
 
 
 def evaluate_gate(findings: tuple[Finding, ...]) -> GateDecision:

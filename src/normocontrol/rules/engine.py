@@ -13,7 +13,7 @@ from normocontrol.domain import Finding, FindingStatus, RuleLayer, Severity
 from normocontrol.rubric.models import Capability, EffectiveRule
 from normocontrol.rubric.models import Severity as RubricSeverity
 from normocontrol.rules.base import RuleExecutionError
-from normocontrol.rules.context import ExecutionContext
+from normocontrol.rules.context import ExecutionContext, SourceKind
 from normocontrol.rules.gate import GateDecision, evaluate_gate, formal_exit_code
 from normocontrol.rules.registry import ImplementationStatus, RuleRegistry
 
@@ -180,6 +180,20 @@ class FormalEngine:
 
         missing = context.missing_sources(implementation.required_sources)
         if missing:
+            if (
+                missing == (SourceKind.BIB_FILES,)
+                and context.latex is not None
+                and not context.bibliography_expected
+            ):
+                return (
+                    _make_finding(
+                        rule,
+                        layer=layer,
+                        status=FindingStatus.NOT_APPLICABLE,
+                        severity=rule.severity,
+                        message="bibliography sources are not declared",
+                    ),
+                )
             missing_names = ", ".join(item.value for item in missing)
             return (
                 _make_finding(

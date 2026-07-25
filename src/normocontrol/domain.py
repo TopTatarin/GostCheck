@@ -123,17 +123,19 @@ class RunReport(ContractModel):
     @model_validator(mode="after")
     def validate_exit_code(self) -> Self:
         """Keep the serialized exit code consistent with formal findings."""
-        has_formal_failure = any(
-            finding.status is FindingStatus.FAIL
+        has_blocking_formal_finding = any(
+            finding.layer in {RuleLayer.CLASS, RuleLayer.SCRIPT, RuleLayer.CLASS_SCRIPT}
+            and finding.severity is Severity.ERROR
+            and finding.status in {FindingStatus.FAIL, FindingStatus.UNVERIFIABLE}
             for stage in self.stages
             for finding in stage.findings
         )
         if self.exit_code in {ExitCode.CONFIG_ERROR, ExitCode.INTERNAL_ERROR}:
             return self
-        if has_formal_failure and self.exit_code is not ExitCode.FORMAL_FAILURE:
-            msg = "formal fail findings require exit_code=2"
+        if has_blocking_formal_finding and self.exit_code is not ExitCode.FORMAL_FAILURE:
+            msg = "blocking formal findings require exit_code=2"
             raise ValueError(msg)
-        if not has_formal_failure and self.exit_code is ExitCode.FORMAL_FAILURE:
-            msg = "exit_code=2 requires at least one formal fail finding"
+        if not has_blocking_formal_finding and self.exit_code is ExitCode.FORMAL_FAILURE:
+            msg = "exit_code=2 requires at least one blocking formal finding"
             raise ValueError(msg)
         return self
