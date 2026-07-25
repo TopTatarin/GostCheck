@@ -21,6 +21,7 @@ runs:
         sudo apt-get install --no-install-recommends -y \
           biber \
           chktex \
+          fonts-freefont-ttf \
           fonts-texgyre \
           latexmk \
           texlive-bibtex-extra \
@@ -34,6 +35,7 @@ runs:
         command -v biber
         kpsewhich biblatex-gost.def
         kpsewhich gost-numeric.bbx
+        fc-match "FreeSerif" | grep -F "FreeSerif"
         fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
     - name: Set up Python
       uses: actions/setup-python@v7

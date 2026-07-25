@@ -81,13 +81,15 @@ def test_latex_gate_docs_match_hard_ci_contract() -> None:
     assert required_rows == {"lint-and-unit", "formal-gate"}
     assert 'install-tex: "true"' in actions
     assert "if: always()" in actions
-    assert "Proprietary Times New Roman is\nnot installed in CI." in actions
+    assert "Proprietary Times" in actions
+    assert "not installed in CI." in actions
 
     for package in (
         "latexmk",
         "chktex",
         "texlive-xetex",
         "biber",
+        "fonts-freefont-ttf",
         "texlive-bibtex-extra",
         "texlive-lang-cyrillic",
         "fonts-texgyre",

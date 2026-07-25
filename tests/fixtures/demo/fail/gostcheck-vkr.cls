@@ -2,9 +2,11 @@
 \ProvidesClass{gostcheck-vkr}[2025/01/01 GostCheck fixture class]
 \LoadClass{article}
 \RequirePackage{fontspec}
+\RequirePackage{polyglossia}
+\setdefaultlanguage{russian}
 \IfFontExistsTF{Times New Roman}
-  {\setmainfont{Times New Roman}}
-  {\setmainfont{TeX Gyre Termes}}
+  {\setmainfont{Times New Roman}\newfontfamily\cyrillicfont{Times New Roman}}
+  {\setmainfont{TeX Gyre Termes}\newfontfamily\cyrillicfont{FreeSerif}}
 \RequirePackage{titlesec}
 \RequirePackage{setspace}
 \onehalfspacing

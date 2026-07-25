@@ -14,6 +14,7 @@ sudo apt-get update
 sudo apt-get install --no-install-recommends -y \
   biber \
   chktex \
+  fonts-freefont-ttf \
   fonts-texgyre \
   latexmk \
   texlive-bibtex-extra \
@@ -24,12 +25,15 @@ sudo apt-get install --no-install-recommends -y \
 command -v latexmk chktex xelatex biber
 kpsewhich biblatex-gost.def
 kpsewhich gost-numeric.bbx
+fc-match "FreeSerif" | grep -F "FreeSerif"
 fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
 ```
 
 CI does not install proprietary Times New Roman. Synthetic classes keep the
-formal Times New Roman declaration but compile with TeX Gyre Termes through
-`\IfFontExistsTF` when Times New Roman is absent.
+formal Times New Roman declaration but select TeX Gyre Termes through
+`\IfFontExistsTF` when Times New Roman is absent. Ubuntu 24.04's TeX Gyre
+Termes lacks Cyrillic glyphs, so the same branch declares FreeSerif as the
+free Cyrillic family used by Polyglossia.
 
 ## Install
 
