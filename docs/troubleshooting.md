@@ -38,8 +38,8 @@ rerun the gate. Blocking diagnostics are not suppressed with `|| true`.
 Times New Roman declaration for formal inspection and falls back to TeX Gyre
 Termes at compile time via `\IfFontExistsTF`; Polyglossia uses FreeSerif for
 Cyrillic glyphs. If fallback lookup fails, verify `fc-match "TeX Gyre Termes"`
-and `fc-match "FreeSerif"`, then install `fonts-texgyre` and
-`fonts-freefont-ttf`.
+and the `FreeSerif`, `FreeSans`, and `FreeMono` families with `fc-match`, then
+install `fonts-texgyre` and `fonts-freefont-ttf`.
 
 ## Missing font / PDF geometry
 

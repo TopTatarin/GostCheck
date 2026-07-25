@@ -25,6 +25,8 @@ sudo apt-get install --no-install-recommends -y \
 command -v latexmk chktex xelatex biber
 kpsewhich biblatex-gost.def
 kpsewhich gost-numeric.bbx
+fc-match "FreeMono" | grep -F "FreeMono"
+fc-match "FreeSans" | grep -F "FreeSans"
 fc-match "FreeSerif" | grep -F "FreeSerif"
 fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
 ```
