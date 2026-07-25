@@ -59,9 +59,30 @@ inside project root (no `..` escapes).
 ## Ollama CPU / OOM
 
 **Symptom:** Slow replies, `100% CPU`, process killed.  
-**Action:** See [gpu-runbook.md](gpu-runbook.md): reduce `--num-ctx`, free VRAM,
-or `CUDA_VISIBLE_DEVICES=-1` for CPU. Semantic stays advisory — formal merge
-unaffected.
+**Action:** Run `ollama ps`. `100% CPU` is a valid fallback but not a GPU baseline.
+For OOM, free VRAM or reduce `LLM_NUM_CTX`/`--num-ctx`; values above the tested 8192
+are explicit opt-in. Use `CUDA_VISIBLE_DEVICES=-1` only after restarting the daemon
+as described in [gpu-runbook.md](gpu-runbook.md). Semantic stays advisory — formal
+merge unaffected.
+
+## Ollama doctor is UNVERIFIABLE
+
+**Symptom:** `normocontrol llm doctor --provider ollama` does not return `status=OK`.
+**Action:** Read `detail`: `endpoint is unavailable` means the daemon is unreachable;
+`configured model is not available` means run `ollama pull qwen3:8b-q4_K_M`;
+`strict JSON schema capability is unavailable` means the daemon/model cannot satisfy
+the mandatory schema probe. Do not bypass the schema. On Windows keep the default
+`http://127.0.0.1:11434/v1`; `localhost` may resolve to IPv6. Local Ollama calls ignore
+HTTP proxy variables, so a corporate proxy cannot capture synthetic or document text.
+
+## Ollama response is unverifiable
+
+**Symptom:** detail mentions token-limit truncation or JSON schema mismatch.
+**Action:** Increase `LLM_MAX_OUTPUT_TOKENS` only within the available context/VRAM, or
+shorten the input. A complete Markdown-fenced JSON object is accepted and still
+Pydantic-validated. Separate `thinking`/`reasoning` is never treated as answer content;
+Qwen3 is called with `think: false`. Invalid output stays `unverifiable` and cannot
+change the formal merge gate.
 
 ## GitHub token / PR comment
 
