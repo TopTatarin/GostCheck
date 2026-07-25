@@ -65,6 +65,29 @@ def test_security_and_acceptance_mention_branch_protection() -> None:
     assert "git tag" in acceptance
 
 
+def test_acceptance_quality_commands_match_release_check() -> None:
+    acceptance = (ROOT / "docs" / "acceptance.md").read_text(encoding="utf-8")
+    documented_commands = {
+        "ruff_format": "ruff format --check .",
+        "ruff_check": "ruff check .",
+        "mypy": "mypy src",
+        "pytest": "python -m pytest -q",
+    }
+    release_prefixes = {
+        "ruff_format": ["-m", "ruff", "format", "--check", "."],
+        "ruff_check": ["-m", "ruff", "check", "."],
+        "mypy": ["-m", "mypy", "src"],
+        "pytest": ["-m", "pytest", "-q"],
+    }
+
+    commands = release_check.stage_commands()
+    assert tuple(commands)[: len(documented_commands)] == tuple(documented_commands)
+    for stage, documented_command in documented_commands.items():
+        assert documented_command in acceptance
+        expected_prefix = release_prefixes[stage]
+        assert commands[stage][1 : len(expected_prefix) + 1] == expected_prefix
+
+
 def test_local_markdown_links_resolve() -> None:
     """Relative repo links in key docs must point at existing files (no network)."""
     files = [

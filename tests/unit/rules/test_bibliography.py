@@ -19,7 +19,7 @@ from .helpers import effective_rule, execution_context, minimal_rubric
 
 def test_bib_parser_reads_entries() -> None:
     entries = parse_bib_text(
-        '@article{demo,\n  author = {Author},\n  title = {Title},\n  year = {2024},\n}\n'
+        "@article{demo,\n  author = {Author},\n  title = {Title},\n  year = {2024},\n}\n"
     )
     assert len(entries) == 1
     assert entries[0].key == "demo"
@@ -54,7 +54,7 @@ def test_bib02_fails_on_manual_bracket_reference(tmp_path: Path) -> None:
 
 def test_bib04_requires_urldate_for_online(tmp_path: Path) -> None:
     project = _project(tmp_path, body="\\cite{demo}\n")
-    bib = '@article{demo, author={A}, title={T}, year={2024}, url={https://example.org},}\n'
+    bib = "@article{demo, author={A}, title={T}, year={2024}, url={https://example.org},}\n"
     context = _bib_context(project, tmp_path / "refs.bib", bib)
     outcome = Bib04OnlineUrldateRule().run(context, effective_rule("BIB-04"))
     assert outcome.findings[0].status is FindingStatus.FAIL

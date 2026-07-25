@@ -63,11 +63,7 @@ class Fig01PlacementRule:
             ref_pages: list[int] = []
             for span in context.bundle.spans:
                 match = _FIGURE_REF_PAGE_RE.search(span.text)
-                if (
-                    match
-                    and int(match.group(1)) == number
-                    and span.page <= caption_page
-                ):
+                if match and int(match.group(1)) == number and span.page <= caption_page:
                     ref_pages.append(span.page)
             if not ref_pages:
                 continue
@@ -141,10 +137,14 @@ class Fig03FigureReferenceStyleRule:
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
         cls_text = class_file_text(context)
         reader = _reader(context)
-        class_ok = cls_text is not None and re.search(
-            r"\\(?:newcommand|NewDocumentCommand)\{\\risref\}",
-            cls_text,
-        ) is not None
+        class_ok = (
+            cls_text is not None
+            and re.search(
+                r"\\(?:newcommand|NewDocumentCommand)\{\\risref\}",
+                cls_text,
+            )
+            is not None
+        )
         script_ok = not contains_abbreviated_figure_reference(reader.snapshot.body)
         return combine_class_script(
             rule,

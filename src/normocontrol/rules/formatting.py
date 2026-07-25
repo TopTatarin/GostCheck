@@ -123,8 +123,7 @@ class Fmt01BodyFontRule:
         class_ok = (
             re.search(r"\\RequirePackage\s*\{fontspec\}|\\usepackage\s*\{fontspec\}", cls_text)
             is not None
-            and re.search(r"Times\s*New\s*Roman|TimesNewRoman", cls_text, re.IGNORECASE)
-            is not None
+            and re.search(r"Times\s*New\s*Roman|TimesNewRoman", cls_text, re.IGNORECASE) is not None
         )
         pdf_ok: bool | None = None
         if pdf_metrics_available(context):
@@ -162,10 +161,13 @@ class Fmt02HeadingBoldRule:
         cls_text = class_file_text(context)
         if cls_text is None:
             return _unverifiable(rule, "защищённый .cls недоступен")
-        class_ok = re.search(
-            r"\\RequirePackage\s*\{titlesec\}|\\usepackage\s*\{titlesec\}|\\titleformat\b",
-            cls_text,
-        ) is not None
+        class_ok = (
+            re.search(
+                r"\\RequirePackage\s*\{titlesec\}|\\usepackage\s*\{titlesec\}|\\titleformat\b",
+                cls_text,
+            )
+            is not None
+        )
         pdf_ok: bool | None = None
         if pdf_metrics_available(context):
             assert context.bundle is not None

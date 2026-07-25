@@ -168,8 +168,7 @@ def contract_from_report(report: dict) -> dict:
         ],
         "pr_comment_marker": MARKER,
         "manual_approval": (
-            "Нормоконтролёр подтверждает merge после зелёного formal-gate "
-            "(и advisory comment)."
+            "Нормоконтролёр подтверждает merge после зелёного formal-gate (и advisory comment)."
         ),
     }
 
@@ -216,9 +215,7 @@ def run_local_golden(
     assert_matches_expected(report, EXPECTED_PASS)
     if code != 0:
         raise AssertionError(f"pass demo expected exit 0, got {code}")
-    results.append(
-        DemoResult("pass", code, str(report["header"]["gate_status"]), pass_out)
-    )
+    results.append(DemoResult("pass", code, str(report["header"]["gate_status"]), pass_out))
 
     fail_out = out_root / "fail"
     code = run_normocontrol(DEMO_FAIL, fail_out, runner=run)
@@ -226,9 +223,7 @@ def run_local_golden(
     assert_matches_expected(report, EXPECTED_FAIL)
     if code != 2:
         raise AssertionError(f"fail demo expected exit 2, got {code}")
-    results.append(
-        DemoResult("fail", code, str(report["header"]["gate_status"]), fail_out)
-    )
+    results.append(DemoResult("fail", code, str(report["header"]["gate_status"]), fail_out))
 
     fixed_src = prepare_fixed_fixture(out_root / "_fixtures")
     fixed_out = out_root / "fixed"
@@ -240,9 +235,7 @@ def run_local_golden(
         raise AssertionError("fixed demo gate_status must be pass")
     if int(report["counts"]["formal_errors"]) != 0:
         raise AssertionError("fixed demo must clear formal_errors")
-    results.append(
-        DemoResult("fixed", code, str(report["header"]["gate_status"]), fixed_out)
-    )
+    results.append(DemoResult("fixed", code, str(report["header"]["gate_status"]), fixed_out))
     return results
 
 
@@ -325,13 +318,10 @@ def ensure_allowlist(
     slug = resolve_remote_slug(runner=runner)
     if slug not in allowlist:
         raise RuntimeError(
-            f"remote {slug!r} is not in allowlist {sorted(allowlist)}; "
-            "refusing --execute-github"
+            f"remote {slug!r} is not in allowlist {sorted(allowlist)}; refusing --execute-github"
         )
     if not confirm:
-        raise RuntimeError(
-            "refusing GitHub mutations without --i-understand-github-mutations"
-        )
+        raise RuntimeError("refusing GitHub mutations without --i-understand-github-mutations")
     return slug
 
 

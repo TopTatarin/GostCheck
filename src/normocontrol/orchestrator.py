@@ -203,9 +203,7 @@ class Orchestrator:
                     exit_code=exit_code,
                     stages=tuple(stages),
                 )
-                all_findings = tuple(
-                    finding for stage in stages for finding in stage.findings
-                )
+                all_findings = tuple(finding for stage in stages for finding in stage.findings)
                 publish_reports(
                     report,
                     request.out_dir,
@@ -217,11 +215,7 @@ class Orchestrator:
                         ),
                         profile=config.work_profile.value,
                         rubric_version=rubric.meta.version,
-                        model_id=(
-                            None
-                            if request.no_llm
-                            else (request.provider or "disabled")
-                        ),
+                        model_id=(None if request.no_llm else (request.provider or "disabled")),
                         degraded=bool(build_meta.get("degraded")),
                         approvals_required=any(
                             "APPROVAL_REQUIRED" in finding.message.upper()
@@ -388,11 +382,7 @@ class Orchestrator:
                 )
                 meta["degraded"] = True
             else:
-                status = (
-                    FindingStatus.FAIL
-                    if request.fail_closed
-                    else FindingStatus.UNVERIFIABLE
-                )
+                status = FindingStatus.FAIL if request.fail_closed else FindingStatus.UNVERIFIABLE
                 severity = Severity.ERROR if request.fail_closed else Severity.WARN
                 findings.append(
                     Finding(
@@ -565,9 +555,7 @@ class Orchestrator:
                 provider,
                 model_id=llm_config.model or provider.name,
             ).run(bundle)
-            selected = [
-                item for item in report.findings if request.only.allows_rule(item.rule_id)
-            ]
+            selected = [item for item in report.findings if request.only.allows_rule(item.rule_id)]
             findings = tuple(semantic_finding_to_domain(item) for item in selected)
         except Exception as error:
             finding = Finding(

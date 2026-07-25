@@ -78,9 +78,7 @@ def figure_blocks(text: str) -> tuple[FloatBlock, ...]:
 
 def table_blocks(text: str) -> tuple[FloatBlock, ...]:
     return tuple(
-        block
-        for block in find_float_blocks(text)
-        if block.environment in {"table", "longtable"}
+        block for block in find_float_blocks(text) if block.environment in {"table", "longtable"}
     )
 
 
@@ -92,8 +90,7 @@ def reference_targets(text: str) -> tuple[str, ...]:
 
     def outside_floats(start: int) -> bool:
         return all(
-            not (block_start <= start < block_end)
-            for block_start, block_end in excluded_ranges
+            not (block_start <= start < block_end) for block_start, block_end in excluded_ranges
         )
 
     labels: list[str] = []

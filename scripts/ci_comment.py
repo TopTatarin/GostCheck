@@ -34,10 +34,7 @@ def escape_untrusted(text: str) -> str:
     cleaned = cleaned.replace("```", "'''")
     if len(cleaned) > MAX_COMMENT_CHARS:
         head = cleaned[: MAX_COMMENT_CHARS - 80]
-        cleaned = (
-            f"{head}\n\n...[TRUNCATED for GitHub comment limit]\n"
-            f"{MARKER}\n"
-        )
+        cleaned = f"{head}\n\n...[TRUNCATED for GitHub comment limit]\n{MARKER}\n"
     if MARKER not in cleaned:
         cleaned = f"{MARKER}\n{cleaned}"
     return cleaned

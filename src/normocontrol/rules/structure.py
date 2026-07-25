@@ -247,8 +247,7 @@ class Str04SectionVolumeRule:
                         status=FindingStatus.WARN,
                         severity=Severity.WARN,
                         message=(
-                            f"раздел «{section.title}»: {pages} стр.; "
-                            f"рекомендуется {low}–{high}"
+                            f"раздел «{section.title}»: {pages} стр.; рекомендуется {low}–{high}"
                         ),
                         page=section.page_start,
                     )
