@@ -20,4 +20,4 @@
 \counterwithin{table}{section}
 \RequirePackage{amsmath}
 \RequirePackage{longtable}
-\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex-gost}
+\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex}

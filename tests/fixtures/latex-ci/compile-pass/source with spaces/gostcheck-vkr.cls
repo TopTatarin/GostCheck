@@ -5,5 +5,5 @@
 \IfFontExistsTF{Times New Roman}
   {\setmainfont{Times New Roman}}
   {\setmainfont{TeX Gyre Termes}}
-\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex-gost}
+\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex}
 \PackageWarningNoLine{gostcheck-vkr}{Synthetic non-blocking warning}

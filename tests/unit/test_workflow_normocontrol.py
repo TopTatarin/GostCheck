@@ -111,7 +111,8 @@ def test_setup_installs_and_verifies_minimal_tex_toolchain() -> None:
         assert package in script
     for executable in ("latexmk", "chktex", "xelatex", "biber"):
         assert f"command -v {executable}" in script
-    assert "kpsewhich biblatex-gost.sty" in script
+    assert "kpsewhich biblatex-gost.def" in script
+    assert "kpsewhich gost-numeric.bbx" in script
     assert 'fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"' in script
     assert "ttf-mscorefonts-installer" not in script
     assert "msttcorefonts" not in script
@@ -148,6 +149,7 @@ def test_synthetic_latex_fixtures_cover_ci_corner_cases() -> None:
     assert r"\IfFontExistsTF{Times New Roman}" in cls
     assert r"\setmainfont{Times New Roman}" in cls
     assert r"\setmainfont{TeX Gyre Termes}" in cls
+    assert r"\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex}" in cls
     assert "Synthetic non-blocking warning" in cls
     assert "полностью синтетический текст" in main
     assert r"\ref{sec:introduction}" in main
@@ -171,6 +173,7 @@ def test_demo_class_preserves_times_requirement_with_ci_fallback(fixture: str) -
     assert r"\IfFontExistsTF{Times New Roman}" in cls
     assert r"\setmainfont{Times New Roman}" in cls
     assert r"\setmainfont{TeX Gyre Termes}" in cls
+    assert r"\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex}" in cls
     assert (fixture_dir / "latexmkrc").read_text(encoding="utf-8") == "$pdf_mode = 5;\n"
 
 

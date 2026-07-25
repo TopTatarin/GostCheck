@@ -22,7 +22,8 @@ sudo apt-get install --no-install-recommends -y \
   texlive-latex-extra \
   texlive-xetex
 command -v latexmk chktex xelatex biber
-kpsewhich biblatex-gost.sty
+kpsewhich biblatex-gost.def
+kpsewhich gost-numeric.bbx
 fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
 ```
 

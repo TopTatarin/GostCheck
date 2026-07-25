@@ -32,7 +32,8 @@ runs:
         command -v chktex
         command -v xelatex
         command -v biber
-        kpsewhich biblatex-gost.sty
+        kpsewhich biblatex-gost.def
+        kpsewhich gost-numeric.bbx
         fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
     - name: Set up Python
       uses: actions/setup-python@v7
