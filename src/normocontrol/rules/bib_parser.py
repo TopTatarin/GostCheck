@@ -5,6 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from normocontrol.rules.base import RuleExecutionError
+
+
+class BibReadError(RuleExecutionError):
+    """Raised when a bibliography cannot be decoded without exposing its path."""
+
 
 @dataclass(frozen=True, slots=True)
 class BibEntry:
@@ -139,7 +145,11 @@ def load_bib_entries(paths: tuple[Path, ...]) -> tuple[BibEntry, ...]:
     for path in paths:
         if not path.is_file():
             continue
-        merged.extend(parse_bib_text(path.read_text(encoding="utf-8")))
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            raise BibReadError(f"unable to read bibliography: {path.name}") from error
+        merged.extend(parse_bib_text(text))
     return tuple(merged)
 
 

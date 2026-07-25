@@ -167,10 +167,15 @@ def run_formal_check(
     suffix = source.suffix.casefold()
     latex: LatexProject | None = None
     pdf_path: Path | None = None
+    bib_paths: tuple[Path, ...] = ()
+    bibliography_declared = False
     if suffix == ".tex":
         resolved = source.resolve()
         latex = LatexProject(root=root.resolve(), main_tex=resolved)
-        bundle = LatexExtractor(root).extract(resolved)
+        extractor = LatexExtractor(root)
+        bundle = extractor.extract(resolved)
+        bib_paths = extractor.discover_bibliography_paths(resolved)
+        bibliography_declared = extractor.bibliography_declared(resolved)
     elif suffix == ".pdf":
         pdf_path = source.resolve()
         bundle = PdfExtractor(root).extract(pdf_path)
@@ -183,7 +188,8 @@ def run_formal_check(
         bundle=bundle,
         latex=latex,
         pdf_path=pdf_path,
-        bib_paths=(),
+        bib_paths=bib_paths,
+        bibliography_declared=bibliography_declared,
     )
     result = FormalEngine(default_formal_registry()).run(context)
     return RunReport(

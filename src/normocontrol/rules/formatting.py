@@ -36,7 +36,7 @@ def effective_font_size_pt(context: ExecutionContext) -> float:
 
 
 def pdf_metrics_available(context: ExecutionContext) -> bool:
-    """Return whether the bundle exposes a usable PDF text layer."""
+    """Return whether a PDF bundle exposes a usable text layer."""
     return context.has_pdf_text_layer
 
 
@@ -128,8 +128,9 @@ class Fmt01BodyFontRule:
             )
         pdf_ok: bool | None = None
         if pdf_metrics_available(context):
-            assert context.bundle is not None
-            spans = body_spans(context.bundle.spans)
+            pdf_bundle = context.pdf_metrics_bundle
+            assert pdf_bundle is not None
+            spans = body_spans(pdf_bundle.spans)
             if spans:
                 expected = effective_font_size_pt(context)
                 tnr_ratio = times_new_roman_ratio(spans)
@@ -173,8 +174,9 @@ class Fmt02HeadingBoldRule:
         )
         pdf_ok: bool | None = None
         if pdf_metrics_available(context):
-            assert context.bundle is not None
-            headings = heading_spans(context.bundle.spans)
+            pdf_bundle = context.pdf_metrics_bundle
+            assert pdf_bundle is not None
+            headings = heading_spans(pdf_bundle.spans)
             if not headings:
                 pdf_ok = None
             else:
@@ -211,8 +213,9 @@ class Fmt03LineSpacingRule:
             )
         pdf_ok: bool | None = None
         if pdf_metrics_available(context):
-            assert context.bundle is not None
-            ratio = median_line_spacing_ratio(context.bundle.spans)
+            pdf_bundle = context.pdf_metrics_bundle
+            assert pdf_bundle is not None
+            ratio = median_line_spacing_ratio(pdf_bundle.spans)
             if ratio is None:
                 pdf_ok = None
             else:
@@ -277,11 +280,12 @@ class Fmt05MarginsRule:
             else re.search(margin_pattern, cls_text, re.IGNORECASE | re.DOTALL) is not None
         )
         pdf_ok: bool | None = None
-        if pdf_metrics_available(context) and context.bundle is not None and context.bundle.pages:
+        pdf_bundle = context.pdf_metrics_bundle
+        if pdf_metrics_available(context) and pdf_bundle is not None and pdf_bundle.pages:
             violations: list[int] = []
             measured_pages = 0
-            measurable_spans = body_spans(context.bundle.spans)
-            for page in context.bundle.pages:
+            measurable_spans = body_spans(pdf_bundle.spans)
+            for page in pdf_bundle.pages:
                 bbox = page_text_bbox(measurable_spans, page.number)
                 if bbox is None:
                     continue

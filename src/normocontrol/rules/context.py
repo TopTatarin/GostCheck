@@ -38,8 +38,14 @@ class ExecutionContext:
     latex: LatexProject | None
     pdf_path: Path | None
     bib_paths: tuple[Path, ...]
+    pdf_bundle: DocumentBundle | None = None
+    bibliography_declared: bool = False
     fail_closed: bool = False
     canceled: bool = False
+
+    def __post_init__(self) -> None:
+        if self.pdf_bundle is not None and self.pdf_bundle.source_format is not SourceFormat.PDF:
+            raise ValueError("pdf_bundle must use the PDF source format")
 
     def has_source(self, kind: SourceKind) -> bool:
         """Report whether the requested source artifact is available."""
@@ -50,7 +56,7 @@ class ExecutionContext:
         if kind is SourceKind.PDF:
             if self.pdf_path is not None:
                 return True
-            return self.bundle is not None and self.bundle.source_format is SourceFormat.PDF
+            return self.pdf_metrics_bundle is not None
         if kind is SourceKind.COMPILED_PDF:
             return self.pdf_path is not None
         return False
@@ -73,17 +79,24 @@ class ExecutionContext:
     @property
     def has_pdf_text_layer(self) -> bool:
         """Return whether PDF typography and geometry can be measured."""
+        bundle = self.pdf_metrics_bundle
         return (
-            self.bundle is not None
-            and self.bundle.source_format is SourceFormat.PDF
-            and bool(self.bundle.spans)
-            and "PDF_NO_TEXT_LAYER" not in self.bundle.warnings
+            bundle is not None and bool(bundle.spans) and "PDF_NO_TEXT_LAYER" not in bundle.warnings
         )
+
+    @property
+    def pdf_metrics_bundle(self) -> DocumentBundle | None:
+        """Return the dedicated PDF bundle while retaining LaTeX AST sections."""
+        if self.pdf_bundle is not None:
+            return self.pdf_bundle
+        if self.bundle is not None and self.bundle.source_format is SourceFormat.PDF:
+            return self.bundle
+        return None
 
     @property
     def bibliography_expected(self) -> bool:
         """Return whether LaTeX input declares citations or a bibliography resource."""
-        if self.bib_paths:
+        if self.bib_paths or self.bibliography_declared:
             return True
         if (
             self.latex is None

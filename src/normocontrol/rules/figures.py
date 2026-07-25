@@ -44,7 +44,8 @@ class Fig01PlacementRule:
         return context.latex is not None and pdf_metrics_available(context)
 
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
-        assert context.bundle is not None
+        pdf_bundle = context.pdf_metrics_bundle
+        assert pdf_bundle is not None
         reader = _reader(context)
         warnings: list[str] = []
         for block in figure_blocks(reader.snapshot.body):
@@ -53,7 +54,7 @@ class Fig01PlacementRule:
                 continue
             caption_pages = [
                 span.page
-                for span in context.bundle.spans
+                for span in pdf_bundle.spans
                 if f"Рисунок {number}" in _pdf_span_text(span.text)
                 or f"рисунок {number}" in _pdf_span_text(span.text).casefold()
             ]
@@ -61,7 +62,7 @@ class Fig01PlacementRule:
                 continue
             caption_page = min(caption_pages)
             ref_pages: list[int] = []
-            for span in context.bundle.spans:
+            for span in pdf_bundle.spans:
                 match = _FIGURE_REF_PAGE_RE.search(span.text)
                 if match and int(match.group(1)) == number and span.page <= caption_page:
                     ref_pages.append(span.page)

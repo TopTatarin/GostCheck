@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
+import unicodedata
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, cast
 
 from pylatexenc.latex2text import LatexNodes2Text  # type: ignore[import-untyped]
@@ -31,6 +32,11 @@ from normocontrol.extract.sections import SectionDetector
 
 _INCLUDE_RE = re.compile(
     r"\\(?P<command>input|include)\s*(?:\{(?P<braced>[^{}]+)\}|(?P<bare>[^\s{}%]+))"
+)
+_BIBLIOGRAPHY_RE = re.compile(
+    r"\\(?P<command>addbibresource|bibliography)\s*"
+    r"(?:\[[^\]]*\]\s*)?\{(?P<value>[^{}]*)\}",
+    re.IGNORECASE,
 )
 _PROTECTED_BEGIN_RE = re.compile(r"\\begin\{(verbatim\*?|Verbatim|lstlisting|minted)\}")
 _SECTION_LEVELS = {"chapter": 1, "section": 2, "subsection": 3, "subsubsection": 4}
@@ -224,6 +230,61 @@ class LatexExtractor(DocumentExtractor):
             chunks=chunks,
         )
 
+    def discover_bibliography_paths(self, source: Path) -> tuple[Path, ...]:
+        """Resolve bibliography resources without crossing ``project_root``."""
+        main = self._resolve_source(source, base=self.project_root, included=False)
+        references = self._bibliography_references(main, visited=frozenset())
+        if references:
+            paths = [
+                path
+                for reference in references
+                if (path := self._resolve_bibliography(reference)) is not None
+            ]
+        else:
+            paths = [path for path in self.project_files() if path.suffix.casefold() == ".bib"]
+        return self._stable_unique_paths(paths)
+
+    def bibliography_declared(self, source: Path) -> bool:
+        """Return whether reachable LaTeX declares a bibliography command."""
+        main = self._resolve_source(source, base=self.project_root, included=False)
+        return bool(self._bibliography_references(main, visited=frozenset()))
+
+    def project_files(self, *, excluded_roots: tuple[Path, ...] = ()) -> tuple[Path, ...]:
+        """Return every safe project file in deterministic portable order."""
+        excluded = tuple(
+            resolved
+            for root in excluded_roots
+            if (resolved := root.resolve(strict=False)).is_relative_to(self.project_root)
+        )
+        pending = [self.project_root]
+        visited: set[Path] = set()
+        files: list[Path] = []
+        while pending:
+            directory = pending.pop()
+            if directory in visited:
+                continue
+            visited.add(directory)
+            entries = sorted(directory.iterdir(), key=self._path_sort_key, reverse=True)
+            for entry in entries:
+                try:
+                    resolved = entry.resolve(strict=True)
+                except FileNotFoundError as error:
+                    raise SourceNotFoundError(f"project entry not found: {entry.name}") from error
+                if not resolved.is_relative_to(self.project_root):
+                    raise UnsafePathError(
+                        f"project entry resolves outside project root: {entry.name}"
+                    )
+                if any(
+                    resolved == excluded_root or resolved.is_relative_to(excluded_root)
+                    for excluded_root in excluded
+                ):
+                    continue
+                if resolved.is_dir():
+                    pending.append(resolved)
+                elif resolved.is_file():
+                    files.append(resolved)
+        return self._stable_unique_paths(files)
+
     def _resolve_source(self, source: Path, *, base: Path, included: bool) -> Path:
         candidate = source if source.is_absolute() or source.exists() else base / source
         if candidate.suffix == "":
@@ -238,6 +299,78 @@ class LatexExtractor(DocumentExtractor):
         if not resolved.is_file():
             raise SourceNotFoundError(f"LaTeX source is not a file: {source.name}")
         return resolved
+
+    def _bibliography_references(
+        self,
+        path: Path,
+        *,
+        visited: frozenset[Path],
+    ) -> tuple[str, ...]:
+        if path in visited:
+            return ()
+        payload = path.read_bytes()
+        try:
+            raw = payload.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ExtractionError(f"LaTeX source is not UTF-8: {path.name}") from error
+        opaque, _protected = _protect_literal_environments(raw)
+        stripped = _strip_comments(opaque)
+        references: list[str] = []
+        for match in _BIBLIOGRAPHY_RE.finditer(stripped):
+            value = match.group("value")
+            if match.group("command").casefold() == "bibliography":
+                references.extend(part.strip() for part in value.split(",") if part.strip())
+            elif value.strip():
+                references.append(value.strip())
+        for match in _INCLUDE_RE.finditer(stripped):
+            include_name = (match.group("braced") or match.group("bare")).strip()
+            child = self._resolve_source(Path(include_name), base=path.parent, included=True)
+            references.extend(
+                self._bibliography_references(child, visited=visited | frozenset({path}))
+            )
+        return tuple(references)
+
+    def _resolve_bibliography(self, reference: str) -> Path | None:
+        portable = reference.strip().replace("\\", "/")
+        posix = PurePosixPath(portable)
+        windows = PureWindowsPath(reference.strip())
+        display_name = posix.name or "bibliography"
+        if not portable or posix.is_absolute() or windows.is_absolute() or bool(windows.drive):
+            raise UnsafePathError(f"bibliography path must be relative: {display_name}")
+        if ".." in posix.parts:
+            raise UnsafePathError(f"bibliography path traversal is not allowed: {display_name}")
+        candidate = self.project_root.joinpath(*posix.parts)
+        if candidate.suffix == "":
+            candidate = candidate.with_suffix(".bib")
+        elif candidate.suffix.casefold() != ".bib":
+            return None
+        try:
+            resolved = candidate.resolve(strict=True)
+        except FileNotFoundError:
+            return None
+        if not resolved.is_relative_to(self.project_root):
+            raise UnsafePathError(f"bibliography resolves outside project root: {display_name}")
+        if not resolved.is_file():
+            return None
+        return resolved
+
+    def _stable_unique_paths(self, paths: list[Path]) -> tuple[Path, ...]:
+        unique: dict[str, Path] = {}
+        for path in paths:
+            relative = path.relative_to(self.project_root).as_posix()
+            key = unicodedata.normalize("NFC", relative).casefold()
+            unique.setdefault(key, path)
+        return tuple(
+            unique[key]
+            for key in sorted(
+                unique,
+                key=lambda item: (item, unique[item].relative_to(self.project_root).as_posix()),
+            )
+        )
+
+    def _path_sort_key(self, path: Path) -> tuple[str, str]:
+        relative = path.relative_to(self.project_root).as_posix()
+        return unicodedata.normalize("NFC", relative).casefold(), relative
 
     def _expand_file(self, path: Path, *, stack: tuple[Path, ...]) -> str:
         if path in stack:

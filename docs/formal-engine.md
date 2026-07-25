@@ -18,7 +18,10 @@ violation.
 
 ## Execution flow
 
-1. Load `EffectiveRubric` and build `ExecutionContext`.
+1. Load `EffectiveRubric` and build `ExecutionContext`. For LaTeX runs, `bundle`
+   retains AST-derived sections, discovered bibliography files are passed through
+   `bib_paths`, and compiled-PDF spans/pages are carried independently in
+   `pdf_bundle`.
 2. Select enabled rules whose capabilities include `class` or `script`.
 3. For each rule in rubric order:
    - missing registry entry → `unverifiable`
