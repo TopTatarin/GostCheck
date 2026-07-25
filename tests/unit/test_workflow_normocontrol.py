@@ -162,6 +162,7 @@ def test_synthetic_latex_fixtures_cover_ci_corner_cases() -> None:
     assert "полностью синтетический текст" in main
     assert r"\ref{sec:introduction}" in main
     assert r"\autocite{synthetic-standard}" in main
+    assert "\\printbibliography%\n" in main
     assert (pass_dir / "refs.bib").is_file()
 
     compile_fail = (LATEX_FIXTURES / "compile-fail" / "main.tex").read_text(encoding="utf-8")
