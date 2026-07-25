@@ -9,11 +9,13 @@ import pytest
 
 from normocontrol.domain import FindingStatus
 from normocontrol.extract.latex import LatexExtractor
+from normocontrol.orchestrator import OrchestratorHooks, run_pipeline
 from normocontrol.rubric.expansion import expand_rubric
 from normocontrol.rubric.loader import load_config, load_rubric
 from normocontrol.rules.context import ExecutionContext, LatexProject
 from normocontrol.rules.engine import FormalEngine
 from normocontrol.rules.register import default_formal_registry
+from normocontrol.run_context import RunRequest, parse_only
 from normocontrol.tools.latexmk import LatexBuildResult, LatexBuildService, LatexBuildStatus
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -103,3 +105,43 @@ def test_fail_fixtures_trigger_expected_rule(
 ) -> None:
     _, findings = _run_fixture(fixture)
     assert expected_status in _statuses(findings, rule_id)
+
+
+@pytest.mark.parametrize(
+    ("fixture", "rule_id", "expected_status"),
+    [
+        ("fail_bib01", "BIB-01", FindingStatus.FAIL),
+        ("fail_bib02", "BIB-02", FindingStatus.FAIL),
+        ("fail_bib03", "BIB-03", FindingStatus.FAIL),
+        ("fail_bib04", "BIB-04", FindingStatus.FAIL),
+        ("fail_bib05", "BIB-05", FindingStatus.WARN),
+        ("fail_rev01", "REV-01", FindingStatus.WARN),
+        ("fail_rev02", "REV-02", FindingStatus.WARN),
+        ("fail_rev03", "REV-03", FindingStatus.WARN),
+        ("fail_rev04", "REV-04", FindingStatus.FAIL),
+    ],
+)
+def test_bib_and_review_fixtures_run_through_orchestrator(
+    tmp_path: Path,
+    fixture: str,
+    rule_id: str,
+    expected_status: FindingStatus,
+) -> None:
+    report = run_pipeline(
+        RunRequest(
+            source=FIXTURES / fixture,
+            out_dir=tmp_path / "out",
+            config_path=CONFIG_PATH,
+            rubric_path=RUBRIC_PATH,
+            no_llm=True,
+            only=parse_only((rule_id,)),
+            tool_version="bib-orchestrator-test",
+        ),
+        OrchestratorHooks(build_service=_SuccessBuildService()),
+    )
+
+    formal = next(stage for stage in report.stages if stage.name == "formal")
+    assert expected_status in _statuses(formal.findings, rule_id)
+    assert all(
+        "required source unavailable: bib_files" not in item.message for item in formal.findings
+    )

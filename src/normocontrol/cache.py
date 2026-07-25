@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import time
+import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,11 +48,25 @@ def hash_text(value: str) -> str:
     return _sha256_bytes(value.encode("utf-8"))
 
 
-def hash_paths(paths: Iterable[Path]) -> str:
-    """Hash an ordered collection of existing files by relative path + content."""
+def hash_paths(paths: Iterable[Path], *, root: Path | None = None) -> str:
+    """Hash existing files by stable POSIX path and content."""
     digest = hashlib.sha256()
-    for path in sorted(paths, key=lambda item: str(item).casefold()):
-        digest.update(str(path).encode("utf-8"))
+    resolved_root = root.resolve(strict=True) if root is not None else None
+    entries: list[tuple[str, Path]] = []
+    for path in paths:
+        resolved = path.resolve(strict=True)
+        if resolved_root is None:
+            label = resolved.as_posix()
+        else:
+            if not resolved.is_relative_to(resolved_root):
+                raise ValueError(f"cache input resolves outside root: {path.name}")
+            label = resolved.relative_to(resolved_root).as_posix()
+        entries.append((label, resolved))
+    for label, path in sorted(
+        entries,
+        key=lambda item: (unicodedata.normalize("NFC", item[0]).casefold(), item[0]),
+    ):
+        digest.update(label.encode("utf-8"))
         digest.update(b"\0")
         if path.is_file():
             digest.update(hash_file(path).encode("ascii"))

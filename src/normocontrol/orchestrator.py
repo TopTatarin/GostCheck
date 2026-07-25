@@ -72,6 +72,18 @@ class OrchestratorHooks:
     clock: Callable[[], float] = time.perf_counter
 
 
+@dataclass(frozen=True, slots=True)
+class PipelineArtifacts:
+    """Extracted source representations passed between pipeline stages."""
+
+    bundle: DocumentBundle
+    latex: LatexProject | None
+    pdf_path: Path | None
+    bib_paths: tuple[Path, ...] = ()
+    pdf_bundle: DocumentBundle | None = None
+    bibliography_declared: bool = False
+
+
 class Orchestrator:
     """Execute the documented stage order and publish a ``RunReport``."""
 
@@ -96,7 +108,10 @@ class Orchestrator:
             if request.apply_final_severity:
                 rubric = apply_final_severity(rubric)
 
-            source_hash = self._source_hash(source)
+            try:
+                source_hash = self._source_hash(source, excluded_root=request.out_dir)
+            except ExtractionError as error:
+                raise ConfigurationError(str(error)) from error
             rubric_hash = hash_file(request.rubric_path.resolve())
             config_hash = hash_file(request.config_path.resolve())
             base_key = {
@@ -106,13 +121,11 @@ class Orchestrator:
                 "tool_version": request.tool_version,
             }
 
-            bundle: DocumentBundle | None = None
-            latex: LatexProject | None = None
-            pdf_path: Path | None = None
+            artifacts: PipelineArtifacts | None = None
             build_meta: dict[str, Any] = {}
 
             if request.only.includes_stage(StageName.BUILD):
-                build_stage, bundle, latex, pdf_path, build_meta = self._stage_build(
+                build_stage, artifacts, build_meta = self._stage_build(
                     request=request,
                     source=source,
                     cache=cache,
@@ -128,7 +141,10 @@ class Orchestrator:
                 )
                 state.mark_completed(StageName.BUILD)
             else:
-                bundle, latex, pdf_path = self._extract_only(source)
+                try:
+                    artifacts = self._extract_only(source, include_compiled_pdf=True)
+                except ExtractionError as error:
+                    raise ConfigurationError(str(error)) from error
 
             if self._canceled:
                 return self._canceled_report(request, stages, state)
@@ -139,9 +155,7 @@ class Orchestrator:
                     request=request,
                     config=config,
                     rubric=rubric,
-                    bundle=bundle,
-                    latex=latex,
-                    pdf_path=pdf_path,
+                    artifacts=artifacts,
                     cache=cache,
                     base_key=base_key,
                     build_meta=build_meta,
@@ -163,7 +177,7 @@ class Orchestrator:
             if request.only.includes_stage(StageName.SEMANTIC) and not request.no_llm:
                 semantic_stage, semantic_findings = self._stage_semantic(
                     request=request,
-                    bundle=bundle,
+                    bundle=artifacts.bundle if artifacts is not None else None,
                     cache=cache,
                     base_key=base_key,
                     state=state,
@@ -306,24 +320,43 @@ class Orchestrator:
             raise ConfigurationError(f"invalid config/rubric: {error}") from error
         return config, rubric
 
-    def _source_hash(self, source: Path) -> str:
+    def _source_hash(self, source: Path, *, excluded_root: Path | None = None) -> str:
         if source.suffix.casefold() == ".tex":
             root = source.parent
-            files = [path for path in root.rglob("*") if path.is_file()]
-            return hash_paths(files)
+            excluded = () if excluded_root is None else (excluded_root,)
+            files = LatexExtractor(root).project_files(excluded_roots=excluded)
+            return hash_paths(files, root=root)
         return hash_file(source)
 
     def _extract_only(
         self,
         source: Path,
-    ) -> tuple[DocumentBundle, LatexProject | None, Path | None]:
+        *,
+        include_compiled_pdf: bool,
+    ) -> PipelineArtifacts:
         root = source.parent
         suffix = source.suffix.casefold()
         if suffix == ".tex":
-            bundle = LatexExtractor(root).extract(source)
-            return bundle, LatexProject(root=root, main_tex=source), None
+            extractor = LatexExtractor(root)
+            bundle = extractor.extract(source)
+            bib_paths = extractor.discover_bibliography_paths(source)
+            bibliography_declared = extractor.bibliography_declared(source)
+            pdf_path: Path | None = None
+            pdf_bundle: DocumentBundle | None = None
+            compiled = source.with_suffix(".pdf")
+            if include_compiled_pdf and compiled.is_file():
+                pdf_path = compiled
+                pdf_bundle = PdfExtractor(root).extract(compiled)
+            return PipelineArtifacts(
+                bundle=bundle,
+                latex=LatexProject(root=root, main_tex=source),
+                pdf_path=pdf_path,
+                bib_paths=bib_paths,
+                pdf_bundle=pdf_bundle,
+                bibliography_declared=bibliography_declared,
+            )
         bundle = PdfExtractor(root).extract(source)
-        return bundle, None, source
+        return PipelineArtifacts(bundle=bundle, latex=None, pdf_path=source)
 
     def _stage_build(
         self,
@@ -333,19 +366,34 @@ class Orchestrator:
         cache: StageCache,
         base_key: dict[str, str],
         state: RunState,
-    ) -> tuple[StageResult, DocumentBundle, LatexProject | None, Path | None, dict[str, Any]]:
+    ) -> tuple[StageResult, PipelineArtifacts, dict[str, Any]]:
         started = self._hooks.clock()
         key = CacheKeyParts(stage=StageName.BUILD.value, model_hash="none", **base_key)
         cached = cache.get(key)
         if cached is not None:
             bundle = DocumentBundle.model_validate(cached["bundle"])
-            latex = None
-            if cached.get("latex_main"):
-                latex = LatexProject(
-                    root=Path(cached["latex_root"]),
-                    main_tex=Path(cached["latex_main"]),
+            if source.suffix.casefold() == ".tex":
+                extractor = LatexExtractor(source.parent)
+                bib_paths = extractor.discover_bibliography_paths(source)
+                bibliography_declared = extractor.bibliography_declared(source)
+                pdf_payload = cached.get("pdf_bundle")
+                pdf_bundle = (
+                    DocumentBundle.model_validate(pdf_payload)
+                    if isinstance(pdf_payload, dict)
+                    else None
                 )
-            pdf_path = Path(cached["pdf_path"]) if cached.get("pdf_path") else None
+                compiled = source.with_suffix(".pdf")
+                pdf_path = compiled if pdf_bundle is not None and compiled.is_file() else None
+                artifacts = PipelineArtifacts(
+                    bundle=bundle,
+                    latex=LatexProject(root=source.parent, main_tex=source),
+                    pdf_path=pdf_path,
+                    bib_paths=bib_paths,
+                    pdf_bundle=pdf_bundle,
+                    bibliography_declared=bibliography_declared,
+                )
+            else:
+                artifacts = PipelineArtifacts(bundle=bundle, latex=None, pdf_path=source)
             cached_findings = tuple(
                 Finding.model_validate(item) for item in cached.get("findings", [])
             )
@@ -353,15 +401,16 @@ class Orchestrator:
             cached_meta["cache"] = "hit"
             duration = max(0.0, (self._hooks.clock() - started) * 1000.0)
             stage = StageResult(name="build", findings=cached_findings, duration_ms=duration)
-            return stage, bundle, latex, pdf_path, cached_meta
+            return stage, artifacts, cached_meta
 
         findings: list[Finding] = []
         meta: dict[str, Any] = {"cache": "miss"}
         try:
-            bundle, latex, pdf_path = self._extract_only(source)
+            artifacts = self._extract_only(source, include_compiled_pdf=False)
         except ExtractionError as error:
             raise ConfigurationError(str(error)) from error
 
+        latex = artifacts.latex
         if latex is not None:
             build_service = self._hooks.build_service or LatexBuildService()
             result = build_service.build(latex.root, latex.main_tex)
@@ -370,7 +419,33 @@ class Orchestrator:
             if result.status is LatexBuildStatus.SUCCESS:
                 compiled = latex.main_tex.with_suffix(".pdf")
                 if compiled.is_file():
-                    pdf_path = compiled
+                    try:
+                        pdf_bundle = PdfExtractor(latex.root).extract(compiled)
+                    except ExtractionError as error:
+                        self._record_compiled_pdf_failure(
+                            request=request,
+                            state=state,
+                            findings=findings,
+                            message=f"compiled PDF недоступен для метрик: {type(error).__name__}",
+                        )
+                        meta["degraded"] = not request.fail_closed
+                    else:
+                        artifacts = PipelineArtifacts(
+                            bundle=artifacts.bundle,
+                            latex=latex,
+                            pdf_path=compiled,
+                            bib_paths=artifacts.bib_paths,
+                            pdf_bundle=pdf_bundle,
+                            bibliography_declared=artifacts.bibliography_declared,
+                        )
+                else:
+                    self._record_compiled_pdf_failure(
+                        request=request,
+                        state=state,
+                        findings=findings,
+                        message="latexmk завершился успешно, но compiled PDF отсутствует",
+                    )
+                    meta["degraded"] = not request.fail_closed
             elif result.status is LatexBuildStatus.TOOL_MISSING:
                 findings.append(
                     Finding(
@@ -403,10 +478,12 @@ class Orchestrator:
         cache.put(
             key,
             {
-                "bundle": json.loads(bundle.model_dump_json()),
-                "latex_root": str(latex.root) if latex else None,
-                "latex_main": str(latex.main_tex) if latex else None,
-                "pdf_path": str(pdf_path) if pdf_path else None,
+                "bundle": json.loads(artifacts.bundle.model_dump_json()),
+                "pdf_bundle": (
+                    json.loads(artifacts.pdf_bundle.model_dump_json())
+                    if artifacts.pdf_bundle is not None
+                    else None
+                ),
                 "findings": [json.loads(item.model_dump_json()) for item in findings],
                 "meta": meta,
             },
@@ -414,11 +491,33 @@ class Orchestrator:
         duration = max(0.0, (self._hooks.clock() - started) * 1000.0)
         return (
             StageResult(name="build", findings=tuple(findings), duration_ms=duration),
-            bundle,
-            latex,
-            pdf_path,
+            artifacts,
             meta,
         )
+
+    @staticmethod
+    def _record_compiled_pdf_failure(
+        *,
+        request: RunRequest,
+        state: RunState,
+        findings: list[Finding],
+        message: str,
+    ) -> None:
+        status = FindingStatus.FAIL if request.fail_closed else FindingStatus.UNVERIFIABLE
+        severity = Severity.ERROR if request.fail_closed else Severity.WARN
+        findings.append(
+            Finding(
+                rule_id="SYS-03",
+                layer=RuleLayer.SCRIPT,
+                severity=severity,
+                status=status,
+                message=message,
+                evidence=(Evidence(locator="latexmk"),),
+            )
+        )
+        if request.fail_closed:
+            state.exit_code = ExitCode.INTERNAL_ERROR
+            state.messages.append("compiled PDF unavailable with fail_closed=true")
 
     def _stage_formal(
         self,
@@ -426,9 +525,7 @@ class Orchestrator:
         request: RunRequest,
         config: NormocontrolConfig,
         rubric: EffectiveRubric,
-        bundle: DocumentBundle | None,
-        latex: LatexProject | None,
-        pdf_path: Path | None,
+        artifacts: PipelineArtifacts | None,
         cache: StageCache,
         base_key: dict[str, str],
         build_meta: dict[str, Any],
@@ -447,7 +544,8 @@ class Orchestrator:
             stage=StageName.FORMAL.value,
             model_hash=hash_text(
                 f"formal-v2:fail_closed={request.fail_closed}:"
-                f"build_tool_missing={build_tool_missing}"
+                f"build_tool_missing={build_tool_missing}:"
+                f"artifacts={self._formal_artifact_hash(artifacts)}"
             ),
             **base_key,
         )
@@ -457,16 +555,18 @@ class Orchestrator:
             duration = max(0.0, (self._hooks.clock() - started) * 1000.0)
             return StageResult(name="formal", findings=findings, duration_ms=duration), findings
 
-        if bundle is None:
+        if artifacts is None:
             raise ConfigurationError("document bundle missing before formal stage")
 
         context = ExecutionContext(
             rubric=filtered,
             config=config,
-            bundle=bundle,
-            latex=latex,
-            pdf_path=pdf_path,
-            bib_paths=(),
+            bundle=artifacts.bundle,
+            latex=artifacts.latex,
+            pdf_path=artifacts.pdf_path,
+            bib_paths=artifacts.bib_paths,
+            pdf_bundle=artifacts.pdf_bundle,
+            bibliography_declared=artifacts.bibliography_declared,
             fail_closed=request.fail_closed,
             canceled=self._canceled,
         )
@@ -504,6 +604,15 @@ class Orchestrator:
         cache.put(key, {"findings": [json.loads(item.model_dump_json()) for item in findings]})
         duration = max(0.0, (self._hooks.clock() - started) * 1000.0)
         return StageResult(name="formal", findings=findings, duration_ms=duration), findings
+
+    @staticmethod
+    def _formal_artifact_hash(artifacts: PipelineArtifacts | None) -> str:
+        if artifacts is None or artifacts.latex is None:
+            return "none"
+        paths = [*artifacts.bib_paths]
+        if artifacts.pdf_path is not None:
+            paths.append(artifacts.pdf_path)
+        return hash_paths(paths, root=artifacts.latex.root)
 
     def _stage_semantic(
         self,
