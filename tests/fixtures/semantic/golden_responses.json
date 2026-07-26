@@ -130,5 +130,82 @@
       "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
       "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
     }
+  },
+  "ALG-03": {
+    "chunk_id": "алгоритм:1",
+    "quote": "Блок 1. Загрузить документ",
+    "elements": ["numbered_blocks", "textual_descriptions", "one_to_one_coverage"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "ARC-01": {
+    "chunk_id": "архитектурно-техническое-решение:1",
+    "quote": "Модель to be устраняет выявленную проблему",
+    "elements": ["as_is_basis", "to_be_model", "change_rationale", "model_traceability"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "ARC-02": {
+    "chunk_id": "архитектурно-техническое-решение:1",
+    "quote": "Стек и окружение связаны с требованиями",
+    "elements": ["requirements_traceability", "implementation_stack", "environment_interaction", "satisfaction_methods"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "GEN-02": {
+    "chunk_id": "программная-реализация:1",
+    "quote": "Тесты выполняются на синтетическом наборе",
+    "elements": ["audience_context", "reproducible_method", "input_parameters", "result_interpretation"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "IMP-01": {
+    "chunk_id": "программная-реализация:1",
+    "quote": "Стек применяется последовательно",
+    "elements": ["stack_sequence", "testing_order", "datasets", "intermediate_results"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "MTH-03": {
+    "chunk_id": "математическая-модель:1",
+    "quote": "Метрика имеет общий метод расчёта",
+    "elements": ["metric_definitions", "calculation_methods", "goal_indicators", "cross_section_traceability"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "RES-01": {
+    "chunk_id": "анализ-результатов:1",
+    "quote": "каждая задача оценена",
+    "elements": ["task_evaluation", "final_metrics", "metric_interpretation", "criteria_alignment", "quantitative_goal_assessment", "object_problem_resolution", "limitations", "result_summary"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
   }
 }

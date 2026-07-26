@@ -289,13 +289,6 @@ def test_missing_required_element_is_rejected_after_one_repair() -> None:
 def test_remaining_semantic_rules_are_explicitly_not_implemented() -> None:
     deferred = sorted(SEMANTIC_RULE_IDS - IMPLEMENTED_RULE_IDS)
     expected = {
-        "ALG-03",
-        "ARC-01",
-        "ARC-02",
-        "GEN-02",
-        "IMP-01",
-        "MTH-03",
-        "RES-01",
         "REV-02",
         "REV-04",
         "SSA-01",

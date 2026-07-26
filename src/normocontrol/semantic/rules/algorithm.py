@@ -15,3 +15,15 @@ ALG_01 = RuleSpec(
     ),
     elements=("representation_type", "topic_fit", "step_sequence"),
 )
+
+ALG_03 = RuleSpec(
+    rule_id="ALG-03",
+    section_roles=("algorithm",),
+    requirement=(
+        "Сопоставь нумерованные блоки или строки алгоритма с потекстовым описанием по пунктам. "
+        "Каждый блок должен иметь номер, отдельное объяснение и однозначное соответствие "
+        "представлению алгоритма. Полное покрытие означает pass; пропуски или ненумерованное "
+        "описание означают warn."
+    ),
+    elements=("numbered_blocks", "textual_descriptions", "one_to_one_coverage"),
+)

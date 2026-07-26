@@ -12,13 +12,16 @@ from normocontrol.llm.base import LlmError, LlmProvider, LlmResponseError, LlmUn
 from normocontrol.semantic.batching import BatchPlanner, RuleBatch, RuleSpec
 from normocontrol.semantic.evidence import EvidenceVerifier, normalize_quote
 from normocontrol.semantic.prompts import render_rule_prompt, repair_message
-from normocontrol.semantic.rules.algorithm import ALG_01
+from normocontrol.semantic.rules.algorithm import ALG_01, ALG_03
 from normocontrol.semantic.rules.annotation import ANN_01
+from normocontrol.semantic.rules.architecture import ARC_01, ARC_02
 from normocontrol.semantic.rules.cross_section import CON_01, TSK_01, TSK_03
+from normocontrol.semantic.rules.implementation import IMP_01
 from normocontrol.semantic.rules.introduction import INT_01
-from normocontrol.semantic.rules.mathematics import MTH_02
+from normocontrol.semantic.rules.mathematics import MTH_02, MTH_03
+from normocontrol.semantic.rules.results import RES_01
 from normocontrol.semantic.rules.review import REV_05, REV_06
-from normocontrol.semantic.rules.style import GEN_01
+from normocontrol.semantic.rules.style import GEN_01, GEN_02
 from normocontrol.semantic.rules.system_analysis import SSA_04
 from normocontrol.semantic.rules.task_detail import TSK_02
 from normocontrol.semantic.schemas import (
@@ -41,11 +44,18 @@ RULE_SPECS: dict[str, RuleSpec] = {
     spec.rule_id: spec
     for spec in (
         ALG_01,
+        ALG_03,
         ANN_01,
+        ARC_01,
+        ARC_02,
         CON_01,
         GEN_01,
+        GEN_02,
+        IMP_01,
         INT_01,
         MTH_02,
+        MTH_03,
+        RES_01,
         REV_05,
         REV_06,
         SSA_04,
@@ -111,7 +121,7 @@ class SemanticEngine:
                 findings.append(self._not_implemented(rule_id))
                 continue
             batch = self._planner.plan(bundle, spec)
-            if not batch.chunks:
+            if not batch.chunks or batch.missing_roles:
                 findings.append(
                     SemanticFinding(
                         rule_id=rule_id,

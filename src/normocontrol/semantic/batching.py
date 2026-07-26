@@ -19,6 +19,7 @@ class RuleSpec:
     elements: tuple[str, ...]
     max_chunks_per_section: int = 2
     max_total_chunks: int = 6
+    require_all_section_roles: bool = False
 
     def __post_init__(self) -> None:
         if not self.rule_id or not self.section_roles or not self.requirement or not self.elements:
@@ -38,6 +39,7 @@ class RuleBatch:
     spec: RuleSpec
     sections: tuple[Section, ...]
     chunks: tuple[DocumentChunk, ...]
+    missing_roles: tuple[str, ...] = ()
 
 
 _ROLE_ALIASES: dict[str, tuple[str, ...]] = {
@@ -74,6 +76,20 @@ _ROLE_ALIASES: dict[str, tuple[str, ...]] = {
         "algorithm",
         "псевдокод",
         "pseudocode",
+    ),
+    "architecture": (
+        "архитектурно техническое решение",
+        "архитектурное решение",
+        "архитектура",
+        "модель to be",
+        "to be model",
+        "architecture",
+    ),
+    "implementation": (
+        "программная реализация",
+        "реализация",
+        "implementation",
+        "software implementation",
     ),
     "results": (
         "анализ результат",
@@ -160,6 +176,18 @@ class BatchPlanner:
                 key=lambda item: (item.char_start, item.section_id),
             )
         )
+        missing_roles = (
+            tuple(
+                role
+                for role in spec.section_roles
+                if not any(
+                    _matches_role(section, role) and has_body(section)
+                    for section in bundle.sections
+                )
+            )
+            if spec.require_all_section_roles
+            else ()
+        )
         chunks: list[DocumentChunk] = []
         for section in selected_sections:
             candidates = tuple(
@@ -171,4 +199,9 @@ class BatchPlanner:
         sections_with_chunks = tuple(
             section for section in selected_sections if section.section_id in selected_ids
         )
-        return RuleBatch(spec=spec, sections=sections_with_chunks, chunks=bounded)
+        return RuleBatch(
+            spec=spec,
+            sections=sections_with_chunks,
+            chunks=bounded,
+            missing_roles=missing_roles,
+        )
