@@ -1,0 +1,12 @@
+GostCheck run summary
+input: tests/fixtures/demo/pass
+profile: software
+provider: disabled
+gate: FAIL
+degraded: true
+degraded_reason: formal checks unverifiable: FMT-04
+counts: pass=0 fail=0 warn=0 info=0 not_applicable=0 unverifiable=1 skipped=0
+blocking_findings: 1 (FMT-04)
+report.md: build/demo/report.md
+report.json: build/demo/report.json
+exit_code: 2 (formal gate failed)

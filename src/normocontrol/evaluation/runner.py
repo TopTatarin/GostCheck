@@ -86,6 +86,11 @@ def evaluate_catalog(
     build_service: LatexBuildService | None = None,
 ) -> MetricReport:
     """Run all catalog fixtures and compute TP/FP/FN metrics."""
+    config = load_config(config_path)
+    rubric = expand_rubric(load_rubric(rubric_path), config)
+    formal_rule_ids = tuple(
+        rule.id for rule in rubric.rules if rule.layer in {"class", "script", "class+script"}
+    )
     observations: list[tuple[str, str, str, tuple[FindingStatus, ...]]] = []
     for spec in catalog.fixtures:
         findings = run_fixture(
@@ -98,7 +103,7 @@ def evaluate_catalog(
         for rule_id, expected in spec.labels.items():
             statuses = _statuses(findings, rule_id)
             observations.append((spec.id, rule_id, expected, statuses))
-    return compute_metrics(tuple(observations))
+    return compute_metrics(tuple(observations), rule_ids=formal_rule_ids)
 
 
 def evaluate_catalog_file(

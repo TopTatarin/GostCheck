@@ -1,0 +1,12 @@
+GostCheck run summary
+input: tests/fixtures/demo/pass
+profile: software
+provider: disabled
+gate: PASS
+degraded: false
+degraded_reason: none
+counts: pass=2 fail=0 warn=1 info=0 not_applicable=0 unverifiable=0 skipped=0
+blocking_findings: 0
+report.md: build/demo/report.md
+report.json: build/demo/report.json
+exit_code: 0 (success; advisory findings do not block)

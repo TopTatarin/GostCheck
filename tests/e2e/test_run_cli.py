@@ -98,6 +98,13 @@ def test_run_pass_demo_exit_zero(tmp_path: Path) -> None:
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", generated_at)
     assert (out / "report.md").is_file()
     assert (out / "summary.json").is_file()
+    assert "GostCheck run summary" in result.stdout
+    assert "gate: PASS" in result.stdout
+    assert "degraded:" in result.stdout
+    assert "counts: pass=" in result.stdout
+    assert f"report.md: …/{out.name}/report.md" in result.stdout
+    assert f"report.json: …/{out.name}/report.json" in result.stdout
+    assert "exit_code: 0 (success; advisory findings do not block)" in result.stdout
 
 
 def test_run_fail_demo_exit_two(tmp_path: Path) -> None:
@@ -117,6 +124,9 @@ def test_run_fail_demo_exit_two(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == int(ExitCode.FORMAL_FAILURE), result.stdout + result.stderr
+    assert "gate: FAIL" in result.stdout
+    assert "blocking_findings:" in result.stdout
+    assert "exit_code: 2 (formal gate failed)" in result.stdout
 
 
 def test_run_unknown_only_exit_three(tmp_path: Path) -> None:
@@ -137,6 +147,10 @@ def test_run_unknown_only_exit_three(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == int(ExitCode.CONFIG_ERROR)
+    assert "gate: FAIL" in result.stdout
+    assert "exit_code: 3 (input or configuration error)" in result.stdout
+    assert "report.md:" in result.stdout
+    assert "(not generated)" in result.stdout
 
 
 def test_run_missing_source_exit_three(tmp_path: Path) -> None:
@@ -155,6 +169,8 @@ def test_run_missing_source_exit_three(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == int(ExitCode.CONFIG_ERROR)
+    assert "gate: FAIL" in result.stdout
+    assert "exit_code: 3 (input or configuration error)" in result.stdout
 
 
 def _run_pdf_subprocess(
@@ -264,6 +280,61 @@ def test_pdf_without_text_layer_returns_two_in_subprocess(tmp_path: Path) -> Non
     published = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
     assert published["header"]["degraded"] is True
     assert published["counts"]["blocking_unverifiable"] > 0
+    assert "gate: FAIL" in result.stdout
+    assert "degraded: true" in result.stdout
+    assert "degraded_reason: formal checks unverifiable:" in result.stdout
+    assert "unverifiable=" in result.stdout
+
+
+def test_run_supports_cyrillic_paths_with_spaces_and_existing_report_dir(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "Синтетическая работа с пробелами"
+    source_dir.mkdir()
+    source = source_dir / "Проверка шрифта.pdf"
+    source.write_bytes(
+        (ROOT / "tests" / "fixtures" / "pdf" / "fmt_pass.pdf").read_bytes()
+    )
+    out = tmp_path / "Каталог отчёта"
+
+    first = runner.invoke(
+        cli.app,
+        [
+            "--no-llm",
+            "run",
+            str(source),
+            "--config",
+            str(CONFIG),
+            "--rubric",
+            str(RUBRIC),
+            "--out",
+            str(out),
+            "--only",
+            "FMT-01",
+        ],
+    )
+    second = runner.invoke(
+        cli.app,
+        [
+            "--no-llm",
+            "run",
+            str(source),
+            "--config",
+            str(CONFIG),
+            "--rubric",
+            str(RUBRIC),
+            "--out",
+            str(out),
+            "--only",
+            "FMT-01",
+        ],
+    )
+
+    assert first.exit_code == int(ExitCode.SUCCESS), first.stdout + first.stderr
+    assert second.exit_code == int(ExitCode.SUCCESS), second.stdout + second.stderr
+    assert "Проверка шрифта.pdf" in second.stdout
+    assert "…/Каталог отчёта/report.md" in second.stdout
+    assert "gate: PASS" in second.stdout
 
 
 @pytest.mark.parametrize("kind", ["corrupt", "encrypted"])
