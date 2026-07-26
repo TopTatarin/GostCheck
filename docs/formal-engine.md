@@ -61,10 +61,26 @@ For a PDF input with a usable text layer, FMT-01, FMT-02, FMT-03, and FMT-05
 run directly against PyMuPDF `DocumentBundle` page/span geometry. They do not
 require a `LatexProject`:
 
-- FMT-01 checks Times New Roman-compatible font names and approved size.
+- FMT-01 strips six-letter PDF subset prefixes and checks an explicit allowlist
+  of Times-compatible aliases (`Times New Roman`, `TimesNewRomanPSMT`,
+  `Times-Roman`, and `Tempora-Regular`). It weights the font and size ratios by
+  significant characters, not span count. Repeated headers/footers, page
+  numbers, headings, formula fonts, monospaced listings, and identifiable
+  captions are excluded before measuring body text; an empty or geometrically
+  unreliable body sample is `unverifiable`, never PASS.
 - FMT-02 checks detected headings for bold typography.
 - FMT-03 estimates the line-spacing ratio from baselines.
-- FMT-05 checks measurable page text against configured margins.
+- FMT-05 checks each measurable body span, embedded image, and meaningful
+  vector-object bbox against configured margins. A bare page number in the
+  footer zone and repeated marginalia are classified deterministically from
+  geometry and cross-page repetition. The rest of the lower page is not
+  ignored, so ordinary text or graphics outside any allowed boundary still
+  fail.
+
+FMT-01 and FMT-05 attach path-safe evidence with the rule id, relative PDF path,
+page, bbox, measured bounds/ratios, and a short classification diagnostic.
+They use the existing `Finding.evidence`, `path`, and `page` fields, so the
+published report schema remains unchanged.
 
 FMT-04 remains `unverifiable` for PDF-only input because paragraph indentation
 cannot be established reliably from span geometry. A PDF without a text layer
