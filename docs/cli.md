@@ -25,6 +25,35 @@ normocontrol run PATH \
 
 Глобальный флаг `--no-llm` отключает semantic-провайдер независимо от env.
 
+## Резюме запуска
+
+После каждого `normocontrol run` CLI печатает компактное резюме:
+
+```text
+GostCheck run summary
+input: tests/fixtures/demo/pass
+profile: software
+provider: disabled
+gate: PASS
+degraded: false
+degraded_reason: none
+counts: pass=… fail=… warn=… info=… not_applicable=… unverifiable=… skipped=…
+blocking_findings: 0
+report.md: build/demo-pass/report.md
+report.json: build/demo-pass/report.json
+exit_code: 0 (success; advisory findings do not block)
+```
+
+`blocking_findings` содержит только количество и `rule_id`, без текста документа и
+evidence. Для `degraded=true` поле `degraded_reason` перечисляет formal-правила,
+оставшиеся `unverifiable`. При ошибках входа/конфигурации и внутренних ошибках
+резюме также печатается с `gate: FAIL`, кодом `3` или `4` и пометкой
+`(not generated)` у отсутствующих отчётов.
+
+Путь внутри текущего checkout показывается относительно него. Внешний абсолютный
+путь безопасно сокращается до `…/<имя>`: пользовательские каталоги, prompts,
+responses, API-ключи и полный текст ВКР в консоль не выводятся.
+
 ## Коды выхода
 
 | Код | Значение |
@@ -75,6 +104,22 @@ LLM/vision `unverifiable` в этот счётчик не входят и сам
 degraded mode.
 
 Запись стадий атомарна. Повторный запуск с тем же входом использует cache hit; смена rubric/config/tool/model инвалидирует ключ. LLM-cache изолирован по `model_hash`.
+
+## Метрики formal-корпуса
+
+```bash
+python scripts/evaluate_formal_fixtures.py
+```
+
+Помимо общей confusion matrix команда печатает для каждого formal `rule_id`:
+`expected`, `actual`, `TP`, `FP`, `FN`, `TN`, `precision`, `recall`, `F1`,
+числа `unverifiable`/`not_applicable` и `mismatches`. Formal-правило, которого
+нет в corpus, всё равно присутствует в выводе с нулевыми counts и метриками
+`0.000`; это делает пробел покрытия явным. Эти данные относятся к синтетическому
+evaluation corpus и поэтому не добавляются в публичный `report.json` одного
+пользовательского запуска. Schema v1.2 и старые snapshots остаются совместимыми.
+`expected` — число положительных labels (`fail`/`warn`/`detect`), `actual` —
+число fixture-rule пар, где движок действительно выдал `fail` или `warn`.
 
 ## Примеры
 

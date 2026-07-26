@@ -40,12 +40,12 @@ class ConfusionCounts:
     @property
     def precision(self) -> float:
         denominator = self.tp + self.fp
-        return 1.0 if denominator == 0 else self.tp / denominator
+        return 0.0 if denominator == 0 else self.tp / denominator
 
     @property
     def recall(self) -> float:
         denominator = self.tp + self.fn
-        return 1.0 if denominator == 0 else self.tp / denominator
+        return 0.0 if denominator == 0 else self.tp / denominator
 
     @property
     def f1(self) -> float:
@@ -71,15 +71,29 @@ class MetricReport:
     counts: ConfusionCounts
     mismatches: tuple[MetricMismatch, ...]
     labeled_pairs: int
+    per_rule: tuple[RuleMetric, ...]
 
 
-def compute_metrics(
-    observations: tuple[tuple[str, str, str, tuple[FindingStatus, ...]], ...],
-) -> MetricReport:
-    """Compute TP/FP/FN/TN from fixture/rule observations."""
+@dataclass(frozen=True, slots=True)
+class RuleMetric:
+    """Confusion matrix and outcome coverage for one formal rule."""
+
+    rule_id: str
+    expected: int
+    actual: int
+    counts: ConfusionCounts
+    unverifiable: int
+    not_applicable: int
+    mismatches: tuple[MetricMismatch, ...]
+    labeled_pairs: int
+
+
+Observation = tuple[str, str, str, tuple[FindingStatus, ...]]
+
+
+def _compute_counts(observations: tuple[Observation, ...]) -> ConfusionCounts:
     tp = fp = fn = tn = 0
-    mismatches: list[MetricMismatch] = []
-    for fixture_id, rule_id, expected, statuses in observations:
+    for _, _, expected, statuses in observations:
         positive = expected in {"fail", "warn", "detect"}
         triggered = is_triggered(statuses)
         if positive and triggered:
@@ -90,10 +104,51 @@ def compute_metrics(
             fp += 1
         else:
             tn += 1
+    return ConfusionCounts(tp=tp, fp=fp, fn=fn, tn=tn)
+
+
+def compute_metrics(
+    observations: tuple[Observation, ...],
+    *,
+    rule_ids: tuple[str, ...] = (),
+) -> MetricReport:
+    """Compute TP/FP/FN/TN from fixture/rule observations."""
+    mismatches: list[MetricMismatch] = []
+    for fixture_id, rule_id, expected, statuses in observations:
         if not expectation_matches(statuses, expected):
             mismatches.append(MetricMismatch(fixture_id, rule_id, expected, statuses))
+
+    ordered_rule_ids = tuple(dict.fromkeys((*rule_ids, *(item[1] for item in observations))))
+    per_rule: list[RuleMetric] = []
+    for rule_id in ordered_rule_ids:
+        selected = tuple(item for item in observations if item[1] == rule_id)
+        rule_mismatches = tuple(item for item in mismatches if item.rule_id == rule_id)
+        per_rule.append(
+            RuleMetric(
+                rule_id=rule_id,
+                expected=sum(
+                    expected in {"fail", "warn", "detect"}
+                    for _, _, expected, _ in selected
+                ),
+                actual=sum(is_triggered(statuses) for _, _, _, statuses in selected),
+                counts=_compute_counts(selected),
+                unverifiable=sum(
+                    status is FindingStatus.UNVERIFIABLE
+                    for _, _, _, statuses in selected
+                    for status in statuses
+                ),
+                not_applicable=sum(
+                    status is FindingStatus.NOT_APPLICABLE
+                    for _, _, _, statuses in selected
+                    for status in statuses
+                ),
+                mismatches=rule_mismatches,
+                labeled_pairs=len(selected),
+            )
+        )
     return MetricReport(
-        counts=ConfusionCounts(tp=tp, fp=fp, fn=fn, tn=tn),
+        counts=_compute_counts(observations),
         mismatches=tuple(mismatches),
         labeled_pairs=len(observations),
+        per_rule=tuple(per_rule),
     )

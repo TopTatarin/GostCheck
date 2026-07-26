@@ -1,0 +1,12 @@
+GostCheck run summary
+input: tests/fixtures/demo/pass
+profile: software
+provider: disabled
+gate: FAIL
+degraded: false
+degraded_reason: none
+counts: pass=2 fail=1 warn=0 info=0 not_applicable=0 unverifiable=0 skipped=0
+blocking_findings: 1 (STR-01)
+report.md: build/demo/report.md
+report.json: build/demo/report.json
+exit_code: 2 (formal gate failed)

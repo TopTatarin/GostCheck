@@ -118,6 +118,35 @@ See [self-hosted-runner.md](self-hosted-runner.md).
 **Symptom:** `--missing-artifact` PR comment.  
 **Action:** Re-run `formal-gate`; confirm `upload-artifact` `if: always()`.
 
+## CLI summary says report was not generated
+
+**Symptom:** `normocontrol run` prints `(not generated)` after `report.md` or
+`report.json`.
+**Action:** First read the `exit_code` line. Codes `3` and `4` stop before
+aggregate and normally have no fresh reports. Fix the input/configuration for
+code `3`; for code `4`, rerun with the same flags after checking the tool
+failure. A command using `--only` without `aggregate` may intentionally omit
+`report.md`; include the aggregate stage for both published reports. Do not
+mistake files left by an older run in an existing output directory for fresh
+artifacts: an error summary always marks both as not generated.
+
+## CLI summary path is shortened
+
+**Symptom:** `input`, `report.md`, or `report.json` starts with `…/`.
+**Action:** This is the privacy-safe representation of a path outside the
+current checkout. Relative paths inside the checkout remain directly usable.
+Pass a relative `--out` under the checkout if a fully navigable console path is
+needed; do not disable redaction or print environment/provider payloads.
+
+## Formal per-rule metric has zero denominators
+
+**Symptom:** `evaluate_formal_fixtures.py` prints
+`expected=0 actual=0 TP=0 FP=0 FN=0 TN=0` and zero precision/recall/F1.
+**Action:** The rule is absent from the annotated synthetic corpus. Add a
+synthetic fixture and catalog labels for that `rule_id`; do not copy a real ВКР
+into the repository. Zero metrics are intentional and do not fabricate perfect
+coverage.
+
 ## Yandex 401 / 429
 
 **Symptom:** cloud_blocked or tool_error_advisory in `status.json`.  

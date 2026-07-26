@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Annotated, TextIO
+from typing import Annotated, Any, TextIO
 
 import typer
 from pydantic import SecretStr, ValidationError
@@ -28,6 +29,12 @@ from normocontrol.llm.disabled import DisabledProvider
 from normocontrol.llm.ollama import OllamaProvider
 from normocontrol.llm.yandex import YandexProvider
 from normocontrol.orchestrator import run_pipeline
+from normocontrol.reporting.console import (
+    build_console_summary,
+    build_error_console_summary,
+    render_console_summary,
+)
+from normocontrol.reporting.redaction import redact_text
 from normocontrol.rubric.expansion import expand_rubric
 from normocontrol.rubric.loader import load_config, load_effective_rubric, load_rubric
 from normocontrol.rubric.models import EffectiveRubric, NormocontrolConfig, WorkProfile
@@ -134,6 +141,62 @@ def emit_report(report: RunReport, output_path: Path | None = None) -> None:
         sys.stdout.write(payload)
         return
     output_path.write_text(payload, encoding="utf-8", newline="\n")
+
+
+def _summary_labels(
+    *,
+    config_path: Path,
+    profile: str | None,
+    provider: str | None,
+    model: str | None,
+    base_url: str | None,
+    no_llm: bool,
+) -> tuple[str, str]:
+    """Resolve effective profile/provider without exposing provider configuration."""
+    profile_name = profile or "unknown"
+    provider_name = "disabled" if no_llm else (provider or "configured")
+    try:
+        config = load_config(config_path)
+        profile_name = profile or config.work_profile.value
+        llm_config = load_llm_config(
+            config_values=config.llm.model_dump(),
+            provider_override=provider,
+            base_url_override=base_url,
+            model_override=model,
+            no_llm=no_llm,
+        )
+        provider_name = llm_config.provider.value
+    except (ConfigurationError, LocatedValidationError, OSError, ValidationError):
+        pass
+    return profile_name, provider_name
+
+
+def _load_published_report(path: Path) -> Mapping[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _emit_error_run_summary(
+    *,
+    source: Path,
+    out_dir: Path,
+    profile: str,
+    provider: str,
+    exit_code: ExitCode,
+    reason: str,
+) -> None:
+    summary = build_error_console_summary(
+        source=source,
+        out_dir=out_dir,
+        profile=profile,
+        provider=provider,
+        exit_code=exit_code,
+        reason=reason,
+    )
+    typer.echo(render_console_summary(summary))
 
 
 def load_effective_rubric_for_check(
@@ -379,6 +442,15 @@ def run_command(
     """Run build -> formal -> semantic -> aggregate with documented exit codes."""
     state = ctx.find_root().obj
     global_no_llm = isinstance(state, CliState) and state.no_llm
+    effective_no_llm = global_no_llm or no_llm
+    profile_name, provider_name = _summary_labels(
+        config_path=config,
+        profile=profile,
+        provider=provider,
+        model=model,
+        base_url=base_url,
+        no_llm=effective_no_llm,
+    )
     try:
         only_filter = parse_only(tuple(only) if only else None)
         request = RunRequest(
@@ -387,7 +459,7 @@ def run_command(
             config_path=config,
             rubric_path=rubric,
             profile=profile,
-            no_llm=global_no_llm or no_llm,
+            no_llm=effective_no_llm,
             provider=provider,
             model=model,
             base_url=base_url,
@@ -398,19 +470,68 @@ def run_command(
         )
         report = run_pipeline(request)
     except ConfigurationError as error:
-        typer.echo(f"ERROR {error}", err=True)
+        reason = redact_text(str(error))
+        typer.echo(f"ERROR {reason}", err=True)
+        _emit_error_run_summary(
+            source=source,
+            out_dir=out,
+            profile=profile_name,
+            provider=provider_name,
+            exit_code=ExitCode.CONFIG_ERROR,
+            reason=reason,
+        )
         raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
     except LocatedValidationError as error:
-        typer.echo(f"ERROR {error}", err=True)
+        reason = redact_text(str(error))
+        typer.echo(f"ERROR {reason}", err=True)
+        _emit_error_run_summary(
+            source=source,
+            out_dir=out,
+            profile=profile_name,
+            provider=provider_name,
+            exit_code=ExitCode.CONFIG_ERROR,
+            reason=reason,
+        )
         raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
     except LockError as error:
-        typer.echo(f"ERROR {error}", err=True)
+        reason = redact_text(str(error))
+        typer.echo(f"ERROR {reason}", err=True)
+        _emit_error_run_summary(
+            source=source,
+            out_dir=out,
+            profile=profile_name,
+            provider=provider_name,
+            exit_code=ExitCode.CONFIG_ERROR,
+            reason=reason,
+        )
         raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
     except Exception as error:
-        typer.echo(f"ERROR internal failure: {type(error).__name__}", err=True)
+        reason = f"internal failure: {type(error).__name__}"
+        typer.echo(f"ERROR {reason}", err=True)
+        _emit_error_run_summary(
+            source=source,
+            out_dir=out,
+            profile=profile_name,
+            provider=provider_name,
+            exit_code=ExitCode.INTERNAL_ERROR,
+            reason=reason,
+        )
         raise typer.Exit(code=int(ExitCode.INTERNAL_ERROR)) from error
 
     # Published artifacts are written by the orchestrator aggregate stage.
+    published = _load_published_report(out / "report.json")
+    header = published.get("header") if published is not None else None
+    if isinstance(header, Mapping) and isinstance(header.get("profile"), str):
+        profile_name = header["profile"]
+    summary = build_console_summary(
+        report,
+        source=source,
+        out_dir=out,
+        profile=profile_name,
+        provider=provider_name,
+        published=published,
+    )
+    typer.echo(render_console_summary(summary))
     raise typer.Exit(code=int(report.exit_code))
 
 

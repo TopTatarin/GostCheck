@@ -39,6 +39,22 @@ normocontrol run tests/fixtures/demo/fail --provider disabled --out build/demo-f
 powershell -ExecutionPolicy Bypass -File demo/run_demo.ps1 -Mode dry-run
 ```
 
+После `normocontrol run` не нужно искать output-каталог вручную: CLI сразу
+показывает вход, профиль/provider, `gate: PASS|FAIL`, degraded-причину, counts
+по status, blocking `rule_id`, пути к `report.md`/`report.json` и расшифровку
+кода выхода. Абсолютные пользовательские каталоги безопасно сокращаются; текст
+ВКР, prompts/responses, ключи и персональные данные в резюме не печатаются.
+
+Метрики синтетического formal-корпуса доступны отдельно:
+
+```powershell
+python scripts/evaluate_formal_fixtures.py
+```
+
+Скрипт печатает общие и per-rule `expected/actual`, `TP/FP/FN/TN`,
+`precision/recall/F1`, `unverifiable`, `not_applicable` и mismatches. Правила
+без corpus labels показываются явно с нулевыми метриками.
+
 См. [demo/README.md](demo/README.md).
 
 ## Provider flags
