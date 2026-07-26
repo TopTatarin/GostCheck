@@ -14,5 +14,24 @@ GEN_01 = RuleSpec(
     ),
     elements=("section_handoffs", "causal_chain"),
     max_chunks_per_section=1,
-    max_total_chunks=8,
+    max_total_chunks=12,
+)
+
+GEN_02 = RuleSpec(
+    rule_id="GEN-02",
+    section_roles=("content",),
+    requirement=(
+        "Оцени по доступным разделам, понятен ли текст стороннему читателю и достаточно ли "
+        "описаны исходные условия, методы, параметры и интерпретация результатов для "
+        "воспроизведения. Не оценивай невидимые фрагменты. Полный проверяемый контекст означает "
+        "pass; нераскрытые термины или недостающие параметры означают warn."
+    ),
+    elements=(
+        "audience_context",
+        "reproducible_method",
+        "input_parameters",
+        "result_interpretation",
+    ),
+    max_chunks_per_section=1,
+    max_total_chunks=12,
 )

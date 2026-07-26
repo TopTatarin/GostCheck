@@ -23,10 +23,12 @@ def test_corpus_has_full_sections_and_three_cases_for_every_rule() -> None:
         assert {
             "Алгоритм",
             "Аннотация",
+            "Архитектура",
             "Введение",
             "Математическая модель",
             "Обзор научно-технической информации",
             "Постановка задачи",
+            "Программная реализация",
             "Анализ результатов",
             "Структурный системный анализ",
             "Заключение",
@@ -73,7 +75,7 @@ def test_mock_evaluation_is_reproducible_and_fully_verified() -> None:
     assert first.evidence_validity == 1.0
     assert first.useful_advisory_rate == 1.0
     assert first.implemented_rule_count == len(IMPLEMENTED_RULE_IDS)
-    assert first.not_implemented_rule_count == 13
+    assert first.not_implemented_rule_count == 6
     assert set(first.errors_by_rule_id) == IMPLEMENTED_RULE_IDS
     assert all(errors == () for errors in first.errors_by_rule_id.values())
     assert "Объект исследования" not in first.model_dump_json()

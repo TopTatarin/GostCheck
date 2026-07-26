@@ -22,11 +22,18 @@ SHA256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 IMPLEMENTED_RULE_IDS = frozenset(
     {
         "ALG-01",
+        "ALG-03",
         "ANN-01",
+        "ARC-01",
+        "ARC-02",
         "CON-01",
         "GEN-01",
+        "GEN-02",
+        "IMP-01",
         "INT-01",
         "MTH-02",
+        "MTH-03",
+        "RES-01",
         "REV-05",
         "REV-06",
         "SSA-04",

@@ -110,7 +110,22 @@ def test_three_providers_share_one_non_blocking_domain_contract() -> None:
 
 @pytest.mark.parametrize(
     "rule_id",
-    ("ALG-01", "ANN-01", "MTH-02", "REV-05", "REV-06", "SSA-04", "TSK-02"),
+    (
+        "ALG-01",
+        "ALG-03",
+        "ANN-01",
+        "ARC-01",
+        "ARC-02",
+        "GEN-02",
+        "IMP-01",
+        "MTH-02",
+        "MTH-03",
+        "RES-01",
+        "REV-05",
+        "REV-06",
+        "SSA-04",
+        "TSK-02",
+    ),
 )
 def test_ollama_contract_repairs_invalid_json_then_verifies_exact_evidence(
     rule_id: str,
