@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import httpx
+import pytest
 
 from normocontrol.evaluation.semantic import build_synthetic_bundle, load_semantic_corpus
 from normocontrol.llm.base import AdvisoryStatus, ChatMessage, LlmResult, StrictModel
@@ -107,17 +108,23 @@ def test_three_providers_share_one_non_blocking_domain_contract() -> None:
     assert results[2].advisory.status is AdvisoryStatus.SKIPPED
 
 
-def test_ollama_contract_repairs_invalid_json_then_verifies_exact_evidence() -> None:
+@pytest.mark.parametrize(
+    "rule_id",
+    ("ALG-01", "ANN-01", "MTH-02", "REV-05", "REV-06", "SSA-04", "TSK-02"),
+)
+def test_ollama_contract_repairs_invalid_json_then_verifies_exact_evidence(
+    rule_id: str,
+) -> None:
     corpus = load_semantic_corpus(Path("tests/fixtures/semantic/corpus.json"))
     fixture = next(item for item in corpus.fixtures if item.id == "positive")
-    expectation = next(item for item in fixture.expectations if item.rule_id == "ANN-01")
+    expectation = next(item for item in fixture.expectations if item.rule_id == rule_id)
     bundle = build_synthetic_bundle(fixture)
     quote = expectation.evidence_quote
     assert quote is not None
     owner = next(chunk for chunk in bundle.chunks if quote in chunk.text)
     evidence = (EvidenceQuote(chunk_id=owner.chunk_id, quote=quote),)
     valid = SemanticResponse(
-        rule_id="ANN-01",
+        rule_id=rule_id,
         status=SemanticStatus.PASS,
         confidence=0.95,
         summary="Синтетический ответ подтверждён точной цитатой.",
@@ -128,7 +135,7 @@ def test_ollama_contract_repairs_invalid_json_then_verifies_exact_evidence() -> 
                 state=ElementState.PRESENT,
                 evidence=evidence,
             )
-            for element in RULE_SPECS["ANN-01"].elements
+            for element in RULE_SPECS[rule_id].elements
         ),
     )
     requests: list[dict[str, object]] = []
@@ -156,7 +163,7 @@ def test_ollama_contract_repairs_invalid_json_then_verifies_exact_evidence() -> 
         http_client=client(handler),
     )
 
-    report = SemanticEngine(provider, model_id="contract-model").run(bundle, ("ANN-01",))
+    report = SemanticEngine(provider, model_id="contract-model").run(bundle, (rule_id,))
 
     assert report.findings[0].status is SemanticStatus.PASS
     assert report.findings[0].evidence

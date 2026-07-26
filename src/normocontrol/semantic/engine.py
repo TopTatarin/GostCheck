@@ -12,10 +12,15 @@ from normocontrol.llm.base import LlmError, LlmProvider, LlmResponseError, LlmUn
 from normocontrol.semantic.batching import BatchPlanner, RuleBatch, RuleSpec
 from normocontrol.semantic.evidence import EvidenceVerifier, normalize_quote
 from normocontrol.semantic.prompts import render_rule_prompt, repair_message
+from normocontrol.semantic.rules.algorithm import ALG_01
 from normocontrol.semantic.rules.annotation import ANN_01
 from normocontrol.semantic.rules.cross_section import CON_01, TSK_01, TSK_03
 from normocontrol.semantic.rules.introduction import INT_01
+from normocontrol.semantic.rules.mathematics import MTH_02
+from normocontrol.semantic.rules.review import REV_05, REV_06
 from normocontrol.semantic.rules.style import GEN_01
+from normocontrol.semantic.rules.system_analysis import SSA_04
+from normocontrol.semantic.rules.task_detail import TSK_02
 from normocontrol.semantic.schemas import (
     IMPLEMENTED_RULE_IDS,
     SEMANTIC_RULE_IDS,
@@ -33,7 +38,21 @@ from normocontrol.semantic.schemas import (
 )
 
 RULE_SPECS: dict[str, RuleSpec] = {
-    spec.rule_id: spec for spec in (ANN_01, INT_01, TSK_01, TSK_03, CON_01, GEN_01)
+    spec.rule_id: spec
+    for spec in (
+        ALG_01,
+        ANN_01,
+        CON_01,
+        GEN_01,
+        INT_01,
+        MTH_02,
+        REV_05,
+        REV_06,
+        SSA_04,
+        TSK_01,
+        TSK_02,
+        TSK_03,
+    )
 }
 
 
