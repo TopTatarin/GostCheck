@@ -13,6 +13,7 @@ from normocontrol.llm.config import load_llm_config
 from normocontrol.llm.disabled import DisabledProvider
 from normocontrol.llm.ollama import OllamaProvider
 from normocontrol.llm.yandex import YandexProvider
+from normocontrol.semantic.batching import BatchPlanner
 from normocontrol.semantic.engine import RULE_SPECS, SemanticEngine
 from normocontrol.semantic.schemas import (
     ElementState,
@@ -124,6 +125,7 @@ def test_three_providers_share_one_non_blocking_domain_contract() -> None:
         "REV-05",
         "REV-06",
         "SSA-04",
+        "STR-05",
         "TSK-02",
     ),
 )
@@ -136,7 +138,11 @@ def test_ollama_contract_repairs_invalid_json_then_verifies_exact_evidence(
     bundle = build_synthetic_bundle(fixture)
     quote = expectation.evidence_quote
     assert quote is not None
-    owner = next(chunk for chunk in bundle.chunks if quote in chunk.text)
+    owner = next(
+        chunk
+        for chunk in BatchPlanner().plan(bundle, RULE_SPECS[rule_id]).chunks
+        if quote in chunk.text
+    )
     evidence = (EvidenceQuote(chunk_id=owner.chunk_id, quote=quote),)
     valid = SemanticResponse(
         rule_id=rule_id,
@@ -182,6 +188,9 @@ def test_ollama_contract_repairs_invalid_json_then_verifies_exact_evidence(
 
     assert report.findings[0].status is SemanticStatus.PASS
     assert report.findings[0].evidence
-    assert report.findings[0].evidence[0].locator != owner.quote_locator
+    if quote == owner.text:
+        assert report.findings[0].evidence[0].locator == owner.quote_locator
+    else:
+        assert report.findings[0].evidence[0].locator != owner.quote_locator
     assert report.batches[0].attempts == 2
     assert len(requests[1]["messages"]) == 3

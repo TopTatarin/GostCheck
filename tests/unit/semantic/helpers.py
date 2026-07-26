@@ -27,6 +27,10 @@ SECTION_PARTS = (
         "Вопросы обзора получили обобщённые ответы.",
     ),
     (
+        "Сравнение методов локальной проверки",
+        "Лаконичный тематический подраздел с полностью синтетическим содержанием.",
+    ),
+    (
         "Структурный системный анализ",
         "Описано только текущее состояние объекта и его проблемы.",
     ),
@@ -55,18 +59,34 @@ SECTION_PARTS = (
     ("Заключение", "Все задачи сопоставлены с результатами и оценены количественно."),
     ("Основной раздел", "Результат предыдущего раздела используется следующим разделом."),
 )
+SECTION_LEVELS = tuple(
+    2 if title == "Сравнение методов локальной проверки" else 1
+    for title, _ in SECTION_PARTS
+)
 
 
-def make_bundle(parts: Sequence[tuple[str, str]] = SECTION_PARTS) -> DocumentBundle:
+def make_bundle(
+    parts: Sequence[tuple[str, str]] = SECTION_PARTS,
+    *,
+    levels: Sequence[int] | None = None,
+) -> DocumentBundle:
+    if levels is not None:
+        heading_levels = tuple(levels)
+    elif parts is SECTION_PARTS:
+        heading_levels = SECTION_LEVELS
+    else:
+        heading_levels = (1,) * len(parts)
+    if len(heading_levels) != len(parts):
+        raise ValueError("levels must match parts")
     text = "\n".join(f"{title}\n{body}" for title, body in parts)
     headings = tuple(
         HeadingCandidate(
             title=title,
-            level=1,
+            level=level,
             char_start=text.index(title),
             origin="latex_ast",
         )
-        for title, _ in parts
+        for (title, _), level in zip(parts, heading_levels, strict=True)
     )
     extracted = ExtractedDocument(
         source_format=SourceFormat.LATEX,

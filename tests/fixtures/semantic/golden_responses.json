@@ -76,6 +76,37 @@
       "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
     }
   },
+  "STR-05": {
+    "chunk_id": "heading:4f2065f5627486f9",
+    "quote": "Сравнение методов локальной проверки",
+    "elements": [
+      "conciseness",
+      "thematic_focus",
+      "no_source_by_source_heading"
+    ],
+    "cases": {
+      "complete": {
+        "status": "pass",
+        "state": "present",
+        "confidence": 0.95
+      },
+      "weak": {
+        "status": "warn",
+        "state": "weak",
+        "confidence": 0.55
+      },
+      "absent": {
+        "status": "warn",
+        "state": "absent",
+        "confidence": 0.9
+      },
+      "not_applicable": {
+        "status": "not_applicable",
+        "state": "not_applicable",
+        "confidence": 1.0
+      }
+    }
+  },
   "TSK-01": {
     "chunk_id": "постановка-задачи:1",
     "quote": "Цель измерима",

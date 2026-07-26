@@ -6,7 +6,15 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from normocontrol.extract.base import DocumentBundle, DocumentChunk, Section, SectionKind
+from normocontrol.extract.base import (
+    DocumentBundle,
+    DocumentChunk,
+    Section,
+    SectionKind,
+    make_locator,
+    sha256_text,
+)
+from normocontrol.extract.chunking import estimate_tokens
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +28,7 @@ class RuleSpec:
     max_chunks_per_section: int = 2
     max_total_chunks: int = 6
     require_all_section_roles: bool = False
+    headings_only: bool = False
 
     def __post_init__(self) -> None:
         if not self.rule_id or not self.section_roles or not self.requirement or not self.elements:
@@ -40,6 +49,7 @@ class RuleBatch:
     sections: tuple[Section, ...]
     chunks: tuple[DocumentChunk, ...]
     missing_roles: tuple[str, ...] = ()
+    audit_section_ids: tuple[str, ...] = ()
 
 
 _ROLE_ALIASES: dict[str, tuple[str, ...]] = {
@@ -118,6 +128,8 @@ def _normalize(value: str) -> str:
 
 def _matches_role(section: Section, role: str) -> bool:
     title = _normalize(f"{section.section_id} {section.title}")
+    if role == "subsection_headings":
+        return section.level >= 2 and not any(alias in title for alias in _EXCLUDED_CONTENT)
     if role == "annotation":
         return section.kind is SectionKind.ANNOTATION or any(
             alias in title for alias in _ROLE_ALIASES[role]
@@ -152,6 +164,34 @@ def _bounded_section_chunks(
     head_count = (limit + 1) // 2
     tail_count = limit - head_count
     return ordered[:head_count] + ordered[-tail_count:]
+
+
+def _heading_chunk(bundle: DocumentBundle, section: Section) -> DocumentChunk | None:
+    """Publish one exact heading and no section body to heading-only rules."""
+    heading_start = bundle.text.find(section.title, section.char_start, section.char_end)
+    if heading_start < 0:
+        return None
+    heading_end = heading_start + len(section.title)
+    return DocumentChunk(
+        chunk_id=f"heading:{sha256_text(section.title)[:16]}",
+        text=bundle.text[heading_start:heading_end],
+        token_count=estimate_tokens(section.title),
+        source_hash=bundle.source_hash,
+        section_id=section.section_id,
+        char_start=heading_start,
+        content_start=heading_start,
+        char_end=heading_end,
+        overlap_chars=0,
+        page_start=section.page_start,
+        page_end=section.page_start,
+        quote_locator=make_locator(bundle.source_hash, heading_start, heading_end),
+    )
+
+
+def _audit_section_id(section: Section, *, headings_only: bool) -> str:
+    if headings_only:
+        return f"heading-section:{sha256_text(section.title)[:16]}"
+    return section.section_id
 
 
 class BatchPlanner:
@@ -190,9 +230,14 @@ class BatchPlanner:
         )
         chunks: list[DocumentChunk] = []
         for section in selected_sections:
-            candidates = tuple(
-                chunk for chunk in bundle.chunks if chunk.section_id == section.section_id
-            )
+            candidates: tuple[DocumentChunk, ...]
+            if spec.headings_only:
+                heading = _heading_chunk(bundle, section)
+                candidates = () if heading is None else (heading,)
+            else:
+                candidates = tuple(
+                    chunk for chunk in bundle.chunks if chunk.section_id == section.section_id
+                )
             chunks.extend(_bounded_section_chunks(candidates, spec.max_chunks_per_section))
         bounded = tuple(chunks[: spec.max_total_chunks])
         selected_ids = {chunk.section_id for chunk in bounded}
@@ -204,4 +249,8 @@ class BatchPlanner:
             sections=sections_with_chunks,
             chunks=bounded,
             missing_roles=missing_roles,
+            audit_section_ids=tuple(
+                _audit_section_id(section, headings_only=spec.headings_only)
+                for section in sections_with_chunks
+            ),
         )
