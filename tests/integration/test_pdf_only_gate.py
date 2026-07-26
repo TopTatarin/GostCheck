@@ -64,6 +64,8 @@ def test_fmt_pass_pdf_runs_available_checks_without_latex_requirement() -> None:
 
     for rule_id in ("FMT-01", "FMT-02", "FMT-03", "FMT-05"):
         assert _finding(findings, rule_id).status is FindingStatus.PASS
+    assert _finding(findings, "FMT-01").evidence
+    assert _finding(findings, "FMT-05").evidence
     assert _finding(findings, "FMT-04").status is FindingStatus.UNVERIFIABLE
     assert all(
         "required source unavailable: latex_project" not in item.message for item in findings
@@ -87,6 +89,10 @@ def test_pdf_only_failure_blocks_expected_fmt_rule(
 
     assert expected.status is FindingStatus.FAIL
     assert formal_exit_code(findings) is ExitCode.FORMAL_FAILURE
+    if rule_id in {"FMT-01", "FMT-05"}:
+        assert expected.path == filename
+        assert expected.page == 1
+        assert expected.evidence
 
 
 def test_pdf_without_text_layer_is_blocking_incomplete(tmp_path: Path) -> None:
@@ -98,6 +104,10 @@ def test_pdf_without_text_layer_is_blocking_incomplete(tmp_path: Path) -> None:
         finding = _finding(findings, rule_id)
         assert finding.status is FindingStatus.UNVERIFIABLE
         assert finding.severity is Severity.ERROR
+        if rule_id in {"FMT-01", "FMT-05"}:
+            assert finding.path == "no-text-layer.pdf"
+            assert finding.page == 1
+            assert finding.evidence
 
 
 def test_llm_unverifiable_does_not_change_formal_gate() -> None:

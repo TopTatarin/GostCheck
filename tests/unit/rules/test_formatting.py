@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from normocontrol.domain import FindingStatus
 from normocontrol.extract.base import (
     BoundingBox,
@@ -15,7 +17,13 @@ from normocontrol.extract.base import (
     TextSpan,
     sha256_text,
 )
-from normocontrol.rules._pdf_metrics import is_times_new_roman, span_is_bold
+from normocontrol.rules._pdf_metrics import (
+    font_size_match_ratio,
+    is_times_new_roman,
+    select_body_spans,
+    span_is_bold,
+    times_new_roman_ratio,
+)
 from normocontrol.rules.context import LatexProject
 from normocontrol.rules.formatting import (
     Fmt01BodyFontRule,
@@ -38,6 +46,8 @@ def _span(
     flags: int | None = None,
     x0: float = 100.0,
     y0: float = 100.0,
+    x1: float | None = None,
+    y1: float | None = None,
 ) -> TextSpan:
     return TextSpan(
         text=text,
@@ -47,7 +57,12 @@ def _span(
         font=font,
         font_size=font_size,
         flags=flags,
-        bbox=BoundingBox(x0=x0, y0=y0, x1=x0 + 80, y1=y0 + 14),
+        bbox=BoundingBox(
+            x0=x0,
+            y0=y0,
+            x1=x0 + 80 if x1 is None else x1,
+            y1=y0 + 14 if y1 is None else y1,
+        ),
     )
 
 
@@ -127,6 +142,79 @@ def test_pdf_metric_helpers() -> None:
     assert is_times_new_roman("TimesNewRomanPSMT")
     assert span_is_bold(_span(flags=16))
     assert span_is_bold(_span(font="Times-Bold"))
+
+
+@pytest.mark.parametrize(
+    "font",
+    [
+        "ABCDEF+TimesNewRomanPSMT",
+        "Times New Roman",
+        "Times-Roman",
+        "Tempora-Regular",
+    ],
+)
+def test_times_compatible_aliases_are_explicit(font: str) -> None:
+    assert is_times_new_roman(font)
+
+
+def test_tempora_requires_an_explicit_alias() -> None:
+    assert is_times_new_roman("Tempora-Regular")
+    assert not is_times_new_roman(
+        "Tempora-Regular",
+        aliases={"Times New Roman", "TimesNewRomanPSMT", "Times-Roman"},
+    )
+
+
+@pytest.mark.parametrize(
+    "font",
+    ["Helvetica", "Arial", "LiberationSerif-Regular", "Bookman-Serif"],
+)
+def test_non_alias_fonts_are_not_times_compatible(font: str) -> None:
+    assert not is_times_new_roman(font)
+
+
+def test_character_weighted_ratios_do_not_depend_on_span_splitting() -> None:
+    whole = (
+        _span(text="abcdefgh", font="Times-Roman", font_size=14.0),
+        _span(text="ij", font="Helvetica", font_size=12.0),
+    )
+    split = (
+        *(
+            _span(text=char, font="Times-Roman", font_size=14.0)
+            for char in "abcdefgh"
+        ),
+        *(_span(text=char, font="Helvetica", font_size=12.0) for char in "ij"),
+    )
+
+    assert times_new_roman_ratio(whole) == pytest.approx(0.8)
+    assert times_new_roman_ratio(split) == pytest.approx(0.8)
+    assert font_size_match_ratio(whole, expected_pt=14.0) == pytest.approx(0.8)
+    assert font_size_match_ratio(split, expected_pt=14.0) == pytest.approx(0.8)
+    selection = select_body_spans(split, ())
+    assert selection.significant_chars == 10
+    assert len(selection.spans) == 10
+
+
+def test_fmt01_excludes_heading_and_code_from_body_ratio() -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    body = _span(
+        text="Synthetic body text with enough significant characters for the metric.",
+        font="Times-Roman",
+        font_size=14.0,
+        y0=150.0,
+    )
+    heading = _span(text="Heading", font="Helvetica", font_size=16.0, y0=100.0)
+    code = _span(text="print('synthetic')", font="Courier", font_size=10.0, y0=200.0)
+    bundle = _pdf_bundle(heading, body, code, pages=(page,))
+
+    selection = select_body_spans(bundle.spans, bundle.pages)
+    outcome = Fmt01BodyFontRule().run(
+        _pdf_context("FMT-01", bundle),
+        effective_rule("FMT-01", layer="class"),
+    )
+
+    assert selection.spans == (bundle.spans[1],)
+    assert outcome.findings[0].status is FindingStatus.PASS
 
 
 def test_fmt04_passes_with_expected_parindent(tmp_path: Path) -> None:
@@ -269,3 +357,137 @@ def test_fmt05_ignores_page_without_body_spans_after_measurable_page() -> None:
     )
 
     assert outcome.findings[0].status is FindingStatus.PASS
+
+
+@pytest.mark.parametrize("rule_id", ["FMT-01", "FMT-05"])
+def test_zero_bbox_never_produces_pass(rule_id: str) -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    zero_bbox = _span(text="Synthetic body").model_copy(
+        update={"bbox": BoundingBox(x0=100.0, y0=100.0, x1=100.0, y1=100.0)}
+    )
+    bundle = _pdf_bundle(zero_bbox, pages=(page,))
+    implementation = Fmt01BodyFontRule() if rule_id == "FMT-01" else Fmt05MarginsRule()
+
+    outcome = implementation.run(
+        _pdf_context(rule_id, bundle),
+        effective_rule(rule_id, layer="class"),
+    )
+
+    assert outcome.findings[0].status is FindingStatus.UNVERIFIABLE
+    assert outcome.findings[0].evidence
+
+
+def test_fmt05_ignores_single_page_number_in_footer_zone() -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    bundle = _pdf_bundle(
+        _span(text="Synthetic body text", y0=120.0),
+        _span(text="1", x0=290.0, x1=300.0, y0=810.0, y1=824.0),
+        pages=(page,),
+    )
+
+    outcome = Fmt05MarginsRule().run(
+        _pdf_context("FMT-05", bundle),
+        effective_rule("FMT-05", layer="class"),
+    )
+
+    assert outcome.findings[0].status is FindingStatus.PASS
+
+
+def test_fmt05_ignores_repeated_footer_but_not_the_whole_footer_zone() -> None:
+    pages = (
+        PageInfo(number=1, width=595.0, height=842.0, rotation=0),
+        PageInfo(number=2, width=595.0, height=842.0, rotation=0),
+    )
+    bundle = _pdf_bundle(
+        _span(text="Body page one", page=1, y0=120.0),
+        _span(text="Synthetic department footer 2026", page=1, x0=30.0, y0=800.0),
+        _span(text="Body page two", page=2, y0=120.0),
+        _span(text="Synthetic department footer 2026", page=2, x0=30.0, y0=800.0),
+        pages=pages,
+    )
+
+    outcome = Fmt05MarginsRule().run(
+        _pdf_context("FMT-05", bundle),
+        effective_rule("FMT-05", layer="class"),
+    )
+
+    assert outcome.findings[0].status is FindingStatus.PASS
+    assert "repeated_footer" in (outcome.findings[0].evidence[0].description or "")
+
+
+@pytest.mark.parametrize(
+    ("x0", "y0", "x1", "y1"),
+    [
+        (10.0, 120.0, 150.0, 134.0),
+        (500.0, 120.0, 590.0, 134.0),
+        (100.0, 10.0, 240.0, 24.0),
+        (100.0, 800.0, 240.0, 814.0),
+    ],
+    ids=["left", "right", "top", "bottom"],
+)
+def test_fmt05_fails_for_body_text_beyond_each_margin(
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+) -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    bundle = _pdf_bundle(
+        _span(
+            text="Ordinary synthetic body text",
+            x0=x0,
+            y0=y0,
+            x1=x1,
+            y1=y1,
+        ),
+        pages=(page,),
+    )
+
+    outcome = Fmt05MarginsRule().run(
+        _pdf_context("FMT-05", bundle),
+        effective_rule("FMT-05", layer="class"),
+    )
+
+    assert outcome.findings[0].status is FindingStatus.FAIL
+
+
+def test_footer_like_text_inside_body_is_not_excluded() -> None:
+    pages = (
+        PageInfo(number=1, width=595.0, height=842.0, rotation=0),
+        PageInfo(number=2, width=595.0, height=842.0, rotation=0),
+    )
+    bundle = _pdf_bundle(
+        _span(text="Synthetic footer", page=1, x0=10.0, y0=200.0),
+        _span(text="Synthetic footer", page=2, x0=10.0, y0=200.0),
+        pages=pages,
+    )
+
+    outcome = Fmt05MarginsRule().run(
+        _pdf_context("FMT-05", bundle),
+        effective_rule("FMT-05", layer="class"),
+    )
+
+    assert outcome.findings[0].status is FindingStatus.FAIL
+
+
+def test_fmt_evidence_contains_location_and_numeric_metrics() -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    bundle = _pdf_bundle(
+        _span(text="Ordinary body beyond left margin", x0=10.0, y0=120.0),
+        pages=(page,),
+    )
+
+    finding = Fmt05MarginsRule().run(
+        _pdf_context("FMT-05", bundle),
+        effective_rule("FMT-05", layer="class"),
+    ).findings[0]
+
+    assert finding.rule_id == "FMT-05"
+    assert finding.path == "doc.pdf"
+    assert finding.page == 1
+    assert finding.evidence
+    assert "bbox=" in finding.evidence[0].locator
+    description = finding.evidence[0].description or ""
+    assert "rule_id=FMT-05" in description
+    assert "bounds=[" in description
+    assert "overflow_pt=[" in description

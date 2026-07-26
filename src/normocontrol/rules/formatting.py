@@ -4,20 +4,26 @@ from __future__ import annotations
 
 import re
 
-from normocontrol.domain import FindingStatus, RuleLayer
+from normocontrol.domain import Evidence, FindingStatus, RuleLayer
+from normocontrol.extract.base import BoundingBox, TextSpan
 from normocontrol.rubric.models import EffectiveRule
 from normocontrol.rules._class_text import class_file_text
 from normocontrol.rules._findings import make_rule_finding
 from normocontrol.rules._pdf_metrics import (
     MARGINS_MM,
-    bbox_within_margins,
-    body_spans,
+    check_body_margins,
+    check_layout_object_margins,
+    example_pages,
+    extract_pdf_layout_objects,
     font_size_match_ratio,
     heading_spans,
+    margin_bounds,
     median_line_spacing_ratio,
     page_text_bbox,
+    select_body_spans,
     span_is_bold,
     times_new_roman_ratio,
+    top_fonts,
 )
 from normocontrol.rules.base import RuleRunOutcome
 from normocontrol.rules.context import ExecutionContext, SourceKind
@@ -40,7 +46,14 @@ def pdf_metrics_available(context: ExecutionContext) -> bool:
     return context.has_pdf_text_layer
 
 
-def _pass(rule: EffectiveRule, message: str) -> RuleRunOutcome:
+def _pass(
+    rule: EffectiveRule,
+    message: str,
+    *,
+    path: str | None = None,
+    page: int | None = None,
+    evidence: tuple[Evidence, ...] = (),
+) -> RuleRunOutcome:
     return RuleRunOutcome(
         findings=(
             make_rule_finding(
@@ -48,12 +61,22 @@ def _pass(rule: EffectiveRule, message: str) -> RuleRunOutcome:
                 layer=RuleLayer.CLASS,
                 status=FindingStatus.PASS,
                 message=message,
+                path=path,
+                page=page,
+                evidence=evidence,
             ),
         )
     )
 
 
-def _fail(rule: EffectiveRule, message: str, *, page: int | None = None) -> RuleRunOutcome:
+def _fail(
+    rule: EffectiveRule,
+    message: str,
+    *,
+    path: str | None = None,
+    page: int | None = None,
+    evidence: tuple[Evidence, ...] = (),
+) -> RuleRunOutcome:
     return RuleRunOutcome(
         findings=(
             make_rule_finding(
@@ -61,13 +84,22 @@ def _fail(rule: EffectiveRule, message: str, *, page: int | None = None) -> Rule
                 layer=RuleLayer.CLASS,
                 status=FindingStatus.FAIL,
                 message=message,
+                path=path,
                 page=page,
+                evidence=evidence,
             ),
         )
     )
 
 
-def _unverifiable(rule: EffectiveRule, message: str) -> RuleRunOutcome:
+def _unverifiable(
+    rule: EffectiveRule,
+    message: str,
+    *,
+    path: str | None = None,
+    page: int | None = None,
+    evidence: tuple[Evidence, ...] = (),
+) -> RuleRunOutcome:
     return RuleRunOutcome(
         findings=(
             make_rule_finding(
@@ -75,9 +107,47 @@ def _unverifiable(rule: EffectiveRule, message: str) -> RuleRunOutcome:
                 layer=RuleLayer.CLASS,
                 status=FindingStatus.UNVERIFIABLE,
                 message=message,
+                path=path,
+                page=page,
+                evidence=evidence,
             ),
         )
     )
+
+
+def _pdf_source_path(context: ExecutionContext) -> str | None:
+    bundle = context.pdf_metrics_bundle
+    if bundle is None or not bundle.source_files:
+        return None
+    return bundle.source_files[0].path
+
+
+def _bbox_value(bbox: BoundingBox | None) -> str:
+    if bbox is None:
+        return "unavailable"
+    return ",".join(f"{value:.1f}" for value in (bbox.x0, bbox.y0, bbox.x1, bbox.y1))
+
+
+def _metric_evidence(
+    rule_id: str,
+    *,
+    path: str | None,
+    page: int | None,
+    bbox: BoundingBox | None,
+    description: str,
+) -> tuple[Evidence, ...]:
+    safe_path = path or "<pdf>"
+    locator = (
+        f"{rule_id}|{safe_path}|page={page if page is not None else 'unknown'}|"
+        f"bbox={_bbox_value(bbox)}"
+    )
+    return (Evidence(locator=locator, description=description),)
+
+
+def _first_span_on_page(spans: tuple[TextSpan, ...], page: int | None) -> TextSpan | None:
+    if page is None:
+        return spans[0] if spans else None
+    return next((span for span in spans if span.page == page), None)
 
 
 def _combine_class_pdf(
@@ -91,18 +161,39 @@ def _combine_class_pdf(
     pdf_fail_message: str,
     class_missing_message: str,
     pdf_missing_message: str,
+    pdf_path: str | None = None,
+    pdf_page: int | None = None,
+    pdf_evidence: tuple[Evidence, ...] = (),
 ) -> RuleRunOutcome:
     class_required = context.latex is not None
     pdf_required = context.pdf_only
     if class_required and class_ok is False:
         return _fail(rule, class_fail_message)
     if pdf_ok is False:
-        return _fail(rule, pdf_fail_message)
+        return _fail(
+            rule,
+            pdf_fail_message,
+            path=pdf_path,
+            page=pdf_page,
+            evidence=pdf_evidence,
+        )
     if class_required and class_ok is None:
         return _unverifiable(rule, class_missing_message)
     if pdf_required and pdf_ok is None:
-        return _unverifiable(rule, pdf_missing_message)
-    return _pass(rule, pass_message)
+        return _unverifiable(
+            rule,
+            pdf_missing_message,
+            path=pdf_path,
+            page=pdf_page,
+            evidence=pdf_evidence,
+        )
+    return _pass(
+        rule,
+        pass_message,
+        path=pdf_path,
+        page=pdf_page,
+        evidence=pdf_evidence,
+    )
 
 
 class Fmt01BodyFontRule:
@@ -127,11 +218,17 @@ class Fmt01BodyFontRule:
                 is not None
             )
         pdf_ok: bool | None = None
+        pdf_path = _pdf_source_path(context)
+        pdf_page: int | None = None
+        pdf_evidence: tuple[Evidence, ...] = ()
+        pdf_missing_message = "PDF text layer недоступен для проверки шрифта"
+        pdf_bundle = context.pdf_metrics_bundle
         if pdf_metrics_available(context):
-            pdf_bundle = context.pdf_metrics_bundle
             assert pdf_bundle is not None
-            spans = body_spans(pdf_bundle.spans)
-            if spans:
+            selection = select_body_spans(pdf_bundle.spans, pdf_bundle.pages)
+            spans = selection.spans
+            invalid_chars = dict(selection.excluded_chars).get("invalid_bbox", 0)
+            if spans and selection.significant_chars >= 2:
                 expected = effective_font_size_pt(context)
                 tnr_ratio = times_new_roman_ratio(spans)
                 size_ratio = font_size_match_ratio(
@@ -139,7 +236,86 @@ class Fmt01BodyFontRule:
                     expected_pt=expected,
                     tolerance_pt=_FONT_SIZE_TOLERANCE_PT,
                 )
-                pdf_ok = tnr_ratio >= _BODY_FONT_RATIO_MIN and size_ratio >= _BODY_FONT_RATIO_MIN
+                pages = example_pages(spans)
+                pdf_page = pages[0] if pages else spans[0].page
+                bbox = page_text_bbox(spans, pdf_page)
+                fonts = ", ".join(
+                    f"{name[:40]}:{count}" for name, count in top_fonts(spans)
+                )
+                page_examples = ",".join(str(page) for page in pages)
+                total_with_invalid = selection.significant_chars + invalid_chars
+                max_tnr_ratio = (
+                    (tnr_ratio * selection.significant_chars + invalid_chars)
+                    / total_with_invalid
+                )
+                max_size_ratio = (
+                    (size_ratio * selection.significant_chars + invalid_chars)
+                    / total_with_invalid
+                )
+                proven_failure = (
+                    max_tnr_ratio < _BODY_FONT_RATIO_MIN
+                    or max_size_ratio < _BODY_FONT_RATIO_MIN
+                )
+                if proven_failure:
+                    pdf_ok = False
+                elif selection.invalid_bbox_count:
+                    pdf_missing_message = (
+                        "геометрия части body-spans ненадёжна; FMT-01 нельзя подтвердить"
+                    )
+                else:
+                    pdf_ok = (
+                        tnr_ratio >= _BODY_FONT_RATIO_MIN
+                        and size_ratio >= _BODY_FONT_RATIO_MIN
+                    )
+                description = (
+                    f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
+                    f"bbox=[{_bbox_value(bbox)}]; font_ratio={tnr_ratio:.4f}; "
+                    f"size_ratio={size_ratio:.4f}; expected_pt={expected:.1f}; "
+                    f"body_chars={selection.significant_chars}; top_fonts={fonts}; "
+                    f"pages={page_examples}; invalid_bbox={selection.invalid_bbox_count}"
+                )
+                pdf_evidence = _metric_evidence(
+                    rule.id,
+                    path=pdf_path,
+                    page=pdf_page,
+                    bbox=bbox,
+                    description=description,
+                )
+            else:
+                diagnostic_span = _first_span_on_page(pdf_bundle.spans, None)
+                pdf_page = diagnostic_span.page if diagnostic_span is not None else None
+                diagnostic_bbox = diagnostic_span.bbox if diagnostic_span is not None else None
+                pdf_missing_message = (
+                    "надёжные body-spans не найдены; проверка FMT-01 неполна"
+                )
+                description = (
+                    f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; "
+                    f"page={pdf_page or 'unknown'}; "
+                    f"bbox=[{_bbox_value(diagnostic_bbox)}]; body_chars=0; "
+                    f"invalid_bbox={selection.invalid_bbox_count}; "
+                    "diagnostic=no_reliable_body_spans"
+                )
+                pdf_evidence = _metric_evidence(
+                    rule.id,
+                    path=pdf_path,
+                    page=pdf_page,
+                    bbox=diagnostic_bbox,
+                    description=description,
+                )
+        elif pdf_bundle is not None:
+            pdf_page = pdf_bundle.pages[0].number if pdf_bundle.pages else None
+            description = (
+                f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; "
+                f"page={pdf_page or 'unknown'}; bbox=[unavailable]; body_chars=0; "
+                "diagnostic=pdf_text_layer_unavailable"
+            )
+            pdf_evidence = _metric_evidence(
+                rule.id,
+                path=pdf_path,
+                page=pdf_page,
+                bbox=None,
+                description=description,
+            )
         return _combine_class_pdf(
             context,
             rule,
@@ -147,9 +323,15 @@ class Fmt01BodyFontRule:
             pdf_ok=pdf_ok,
             pass_message="основной текст соответствует Times New Roman и кеглю",
             class_fail_message="класс не задаёт Times New Roman через fontspec",
-            pdf_fail_message="менее 95% PDF-спанов соответствуют Times New Roman/кеглю",
+            pdf_fail_message=(
+                "менее 95% значимых символов body PDF-спанов соответствуют "
+                "Times-compatible alias и ожидаемому кеглю"
+            ),
             class_missing_message="защищённый .cls недоступен",
-            pdf_missing_message="PDF text layer недоступен для проверки шрифта",
+            pdf_missing_message=pdf_missing_message,
+            pdf_path=pdf_path,
+            pdf_page=pdf_page,
+            pdf_evidence=pdf_evidence,
         )
 
 
@@ -280,29 +462,170 @@ class Fmt05MarginsRule:
             else re.search(margin_pattern, cls_text, re.IGNORECASE | re.DOTALL) is not None
         )
         pdf_ok: bool | None = None
+        pdf_path = _pdf_source_path(context)
+        pdf_page: int | None = None
+        pdf_evidence: tuple[Evidence, ...] = ()
+        pdf_missing_message = "PDF text layer недоступен для проверки полей"
         pdf_bundle = context.pdf_metrics_bundle
-        if pdf_metrics_available(context) and pdf_bundle is not None and pdf_bundle.pages:
-            violations: list[int] = []
-            measured_pages = 0
-            measurable_spans = body_spans(pdf_bundle.spans)
-            for page in pdf_bundle.pages:
-                bbox = page_text_bbox(measurable_spans, page.number)
-                if bbox is None:
-                    continue
-                measured_pages += 1
-                metric_page = page
-                if page.rotation in {90, 270}:
-                    metric_page = page.model_copy(
+        if pdf_bundle is not None and pdf_bundle.pages:
+            measurement = check_body_margins(pdf_bundle.spans, pdf_bundle.pages)
+            layout_measurement = check_layout_object_margins(
+                extract_pdf_layout_objects(context.pdf_path),
+                pdf_bundle.pages,
+            )
+            if measurement.violations:
+                pdf_ok = False
+                violation = measurement.violations[0]
+                pdf_page = violation.span.page
+                violation_bbox = violation.span.bbox
+                left, right, top, bottom = violation.bounds
+                overflow = (
+                    max(0.0, left - violation_bbox.x0),
+                    max(0.0, violation_bbox.x1 - right),
+                    max(0.0, top - violation_bbox.y0),
+                    max(0.0, violation_bbox.y1 - bottom),
+                )
+                overflow_text = ",".join(f"{value:.1f}" for value in overflow)
+                description = (
+                    f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
+                    f"bbox=[{_bbox_value(violation_bbox)}]; "
+                    f"bounds=[{left:.1f},{right:.1f},{top:.1f},{bottom:.1f}]; "
+                    f"overflow_pt=[{overflow_text}]; classification=body; "
+                    "reason=not_repeated_header_footer_or_page_number"
+                )
+                pdf_evidence = _metric_evidence(
+                    rule.id,
+                    path=pdf_path,
+                    page=pdf_page,
+                    bbox=violation_bbox,
+                    description=description,
+                )
+            elif layout_measurement.violations:
+                pdf_ok = False
+                layout_violation = layout_measurement.violations[0]
+                pdf_page = layout_violation.item.page
+                layout_bbox = layout_violation.item.bbox
+                left, right, top, bottom = layout_violation.bounds
+                overflow = (
+                    max(0.0, left - layout_bbox.x0),
+                    max(0.0, layout_bbox.x1 - right),
+                    max(0.0, top - layout_bbox.y0),
+                    max(0.0, layout_bbox.y1 - bottom),
+                )
+                overflow_text = ",".join(f"{value:.1f}" for value in overflow)
+                description = (
+                    f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
+                    f"bbox=[{_bbox_value(layout_bbox)}]; "
+                    f"bounds=[{left:.1f},{right:.1f},{top:.1f},{bottom:.1f}]; "
+                    f"overflow_pt=[{overflow_text}]; "
+                    f"classification={layout_violation.item.kind}; "
+                    "reason=not_repeated_header_footer"
+                )
+                pdf_evidence = _metric_evidence(
+                    rule.id,
+                    path=pdf_path,
+                    page=pdf_page,
+                    bbox=layout_bbox,
+                    description=description,
+                )
+            elif measurement.invalid_bbox_count:
+                diagnostic_span = _first_span_on_page(pdf_bundle.spans, None)
+                pdf_page = (
+                    diagnostic_span.page
+                    if diagnostic_span is not None
+                    else pdf_bundle.pages[0].number
+                )
+                diagnostic_bbox = (
+                    diagnostic_span.bbox if diagnostic_span is not None else None
+                )
+                pdf_missing_message = (
+                    "обнаружены spans с ненадёжным bbox; соблюдение полей нельзя подтвердить"
+                )
+                description = (
+                    f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; "
+                    f"page={pdf_page or 'unknown'}; "
+                    f"bbox=[{_bbox_value(diagnostic_bbox)}]; "
+                    f"measured_pages={len(measurement.measured_pages)}; "
+                    f"invalid_bbox={measurement.invalid_bbox_count}; "
+                    "diagnostic=unreliable_geometry"
+                )
+                pdf_evidence = _metric_evidence(
+                    rule.id,
+                    path=pdf_path,
+                    page=pdf_page,
+                    bbox=diagnostic_bbox,
+                    description=description,
+                )
+            elif measurement.content_spans:
+                pdf_ok = True
+                pdf_page = measurement.measured_pages[0]
+                content_bbox = page_text_bbox(measurement.content_spans, pdf_page)
+                page = next(page for page in pdf_bundle.pages if page.number == pdf_page)
+                metric_page = (
+                    page.model_copy(
                         update={
                             "width": page.height,
                             "height": page.width,
                             "rotation": 0,
                         }
                     )
-                if not bbox_within_margins(bbox, metric_page):
-                    violations.append(page.number)
-            if measured_pages:
-                pdf_ok = not violations
+                    if page.rotation in {90, 270}
+                    else page
+                )
+                left, right, top, bottom = margin_bounds(metric_page)
+                excluded = ",".join(
+                    f"{kind}:{count}"
+                    for kind, count in (
+                        *measurement.excluded_counts,
+                        *layout_measurement.excluded_counts,
+                    )
+                ) or "none"
+                description = (
+                    f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
+                    f"bbox=[{_bbox_value(content_bbox)}]; "
+                    f"bounds=[{left:.1f},{right:.1f},{top:.1f},{bottom:.1f}]; "
+                    f"measured_pages={len(measurement.measured_pages)}; "
+                    f"content_spans={len(measurement.content_spans)}; "
+                    f"classified_marginalia={excluded}"
+                )
+                pdf_evidence = _metric_evidence(
+                    rule.id,
+                    path=pdf_path,
+                    page=pdf_page,
+                    bbox=content_bbox,
+                    description=description,
+                )
+            else:
+                diagnostic_span = _first_span_on_page(pdf_bundle.spans, None)
+                pdf_page = (
+                    diagnostic_span.page
+                    if diagnostic_span is not None
+                    else pdf_bundle.pages[0].number
+                )
+                empty_bbox = diagnostic_span.bbox if diagnostic_span is not None else None
+                excluded = ",".join(
+                    f"{kind}:{count}"
+                    for kind, count in (
+                        *measurement.excluded_counts,
+                        *layout_measurement.excluded_counts,
+                    )
+                ) or "none"
+                pdf_missing_message = (
+                    "надёжный body region не найден; соблюдение полей нельзя подтвердить"
+                )
+                description = (
+                    f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; "
+                    f"page={pdf_page or 'unknown'}; bbox=[{_bbox_value(empty_bbox)}]; "
+                    f"content_spans=0; classified_marginalia={excluded}; "
+                    "diagnostic=no_reliable_body_region"
+                )
+                pdf_evidence = _metric_evidence(
+                    rule.id,
+                    path=pdf_path,
+                    page=pdf_page,
+                    bbox=empty_bbox,
+                    description=description,
+                )
         return _combine_class_pdf(
             context,
             rule,
@@ -316,7 +639,10 @@ class Fmt05MarginsRule:
             class_fail_message="класс не задаёт geometry с требуемыми полями",
             pdf_fail_message="текст выходит за допустимые поля страницы",
             class_missing_message="защищённый .cls недоступен",
-            pdf_missing_message="PDF text layer недоступен для проверки полей",
+            pdf_missing_message=pdf_missing_message,
+            pdf_path=pdf_path,
+            pdf_page=pdf_page,
+            pdf_evidence=pdf_evidence,
         )
 
 

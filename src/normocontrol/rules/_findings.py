@@ -17,18 +17,19 @@ def make_rule_finding(
     path: str | None = None,
     page: int | None = None,
     evidence_locator: str | None = None,
+    evidence: tuple[Evidence, ...] = (),
 ) -> Finding:
     chosen = Severity((severity or rule.severity).value)
-    evidence: tuple[Evidence, ...] = ()
+    chosen_evidence = evidence
     if evidence_locator is not None:
-        evidence = (Evidence(locator=evidence_locator),)
+        chosen_evidence = (*chosen_evidence, Evidence(locator=evidence_locator))
     return Finding(
         rule_id=rule.id,
         layer=layer,
         severity=chosen,
         status=status,
         message=message,
-        evidence=evidence,
+        evidence=chosen_evidence,
         path=path,
         page=page,
     )
