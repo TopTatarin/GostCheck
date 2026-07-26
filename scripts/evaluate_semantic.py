@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate the six implemented semantic rules on the synthetic regression corpus."""
+"""Evaluate implemented semantic rules on the synthetic regression corpus."""
 
 from __future__ import annotations
 

@@ -33,6 +33,7 @@ from normocontrol.semantic.engine import RULE_SPECS, SemanticEngine
 from normocontrol.semantic.evidence import normalize_quote
 from normocontrol.semantic.schemas import (
     IMPLEMENTED_RULE_IDS,
+    SEMANTIC_RULE_IDS,
     DiagnosticCode,
     ElementState,
     EvidenceQuote,
@@ -45,9 +46,13 @@ NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_len
 _REQUIRED_SECTION_TITLES = frozenset(
     {
         "аннотация",
+        "алгоритм",
         "введение",
+        "математическая модель",
+        "обзор научно-технической информации",
         "постановка задачи",
         "анализ результатов",
+        "структурный системный анализ",
         "заключение",
     }
 )
@@ -94,7 +99,7 @@ class SemanticExpectation(StrictModel):
 
 
 class SyntheticSemanticFixture(StrictModel):
-    """A fully sectioned synthetic thesis and annotations for all six rules."""
+    """A fully sectioned synthetic thesis with all implemented-rule annotations."""
 
     id: NonEmptyString
     sections: tuple[SyntheticSection, ...]
@@ -173,6 +178,12 @@ class SemanticEvaluationReport(StrictModel):
     corpus_sha256: NonEmptyString
     provider: NonEmptyString
     model_id: NonEmptyString
+    schema_validity: float = Field(ge=0, le=1)
+    evidence_validity: float = Field(ge=0, le=1)
+    useful_advisory_rate: float = Field(ge=0, le=1)
+    implemented_rule_count: int = Field(ge=0)
+    not_implemented_rule_count: int = Field(ge=0)
+    errors_by_rule_id: dict[NonEmptyString, tuple[NonEmptyString, ...]]
     observations: tuple[SemanticObservation, ...]
     rules: tuple[SemanticRuleMetrics, ...]
 
@@ -430,11 +441,31 @@ def evaluate_semantic_corpus(
                 useful_advisory_rate=useful_count / len(actionable),
             )
         )
+    actionable_observations = tuple(
+        item for item in ordered if item.expected is not ExpectedOutcome.INSUFFICIENT
+    )
+    errors_by_rule_id = {
+        rule_id: tuple(
+            f"{item.fixture_id}:{item.diagnostic.value}"
+            for item in ordered
+            if item.rule_id == rule_id and item.diagnostic is not None
+        )
+        for rule_id in sorted(IMPLEMENTED_RULE_IDS)
+    }
     return SemanticEvaluationReport(
         corpus_id=corpus.corpus_id,
         corpus_sha256=semantic_corpus_sha256(corpus),
         provider=provider_name,
         model_id=model_id,
+        schema_validity=sum(item.schema_valid for item in ordered) / len(ordered),
+        evidence_validity=sum(item.evidence_valid for item in ordered) / len(ordered),
+        useful_advisory_rate=(
+            sum(item.useful_advisory for item in actionable_observations)
+            / len(actionable_observations)
+        ),
+        implemented_rule_count=len(IMPLEMENTED_RULE_IDS),
+        not_implemented_rule_count=len(SEMANTIC_RULE_IDS - IMPLEMENTED_RULE_IDS),
+        errors_by_rule_id=errors_by_rule_id,
         observations=ordered,
         rules=tuple(metrics),
     )

@@ -21,10 +21,14 @@ def test_corpus_has_full_sections_and_three_cases_for_every_rule() -> None:
     for fixture in corpus.fixtures:
         titles = {section.title for section in fixture.sections}
         assert {
+            "Алгоритм",
             "Аннотация",
             "Введение",
+            "Математическая модель",
+            "Обзор научно-технической информации",
             "Постановка задачи",
             "Анализ результатов",
+            "Структурный системный анализ",
             "Заключение",
         } <= titles
         bundle = build_synthetic_bundle(fixture)
@@ -65,4 +69,11 @@ def test_mock_evaluation_is_reproducible_and_fully_verified() -> None:
     assert all(item.evidence_valid_rate == 1.0 for item in first.rules)
     assert all(item.useful_advisory_rate == 1.0 for item in first.rules)
     assert len(first.observations) == len(IMPLEMENTED_RULE_IDS) * 3
+    assert first.schema_validity == 1.0
+    assert first.evidence_validity == 1.0
+    assert first.useful_advisory_rate == 1.0
+    assert first.implemented_rule_count == len(IMPLEMENTED_RULE_IDS)
+    assert first.not_implemented_rule_count == 13
+    assert set(first.errors_by_rule_id) == IMPLEMENTED_RULE_IDS
+    assert all(errors == () for errors in first.errors_by_rule_id.values())
     assert "Объект исследования" not in first.model_dump_json()

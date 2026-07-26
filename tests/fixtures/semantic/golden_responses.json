@@ -1,4 +1,15 @@
 {
+  "ALG-01": {
+    "chunk_id": "алгоритм:1",
+    "quote": "Алгоритм представлен проверяемым псевдокодом",
+    "elements": ["representation_type", "topic_fit", "step_sequence"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
   "ANN-01": {
     "chunk_id": "annotation:1",
     "quote": "Синтетическое доказательство",
@@ -21,10 +32,65 @@
       "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
     }
   },
+  "MTH-02": {
+    "chunk_id": "математическая-модель:1",
+    "quote": "Переменные заданы символами",
+    "elements": ["symbolic_inputs", "general_form", "variable_explanations", "formula_explanations", "no_numeric_substitution"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "REV-05": {
+    "chunk_id": "обзор-научно-технической-информации:1",
+    "quote": "Сравнение подходов образует тематическую классификацию",
+    "elements": ["comparison", "synthesis", "classification", "thematic_structure"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "REV-06": {
+    "chunk_id": "обзор-научно-технической-информации:1",
+    "quote": "Вопросы обзора получили обобщённые ответы",
+    "elements": ["background_state", "review_questions", "selection_method", "metadata_analysis", "comparative_analysis", "answers", "method_choice_conclusion"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "SSA-04": {
+    "chunk_id": "структурный-системный-анализ:1",
+    "quote": "Описано только текущее состояние объекта",
+    "elements": ["as_is_description", "current_problems", "preproject_boundary"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
   "TSK-01": {
     "chunk_id": "постановка-задачи:1",
     "quote": "Цель измерима",
     "elements": ["analysis_summary", "goal", "tasks", "expected_result"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "TSK-02": {
+    "chunk_id": "постановка-задачи:1",
+    "quote": "Задачи перечислены в изменённом порядке",
+    "elements": ["contextualized_actions", "method_detail", "expected_outputs"],
     "cases": {
       "complete": {"status": "pass", "state": "present", "confidence": 0.95},
       "weak": {"status": "warn", "state": "weak", "confidence": 0.55},

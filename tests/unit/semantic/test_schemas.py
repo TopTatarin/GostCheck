@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from normocontrol.semantic.schemas import SemanticResponse
+from normocontrol.semantic.schemas import SemanticResponse, TokenUsage
 
 from .helpers import response_payload
 
@@ -87,3 +87,16 @@ def test_compact_llm_wire_aliases_preserve_public_field_names() -> None:
         "q",
         "e",
     }
+
+
+def test_token_usage_is_explicitly_a_local_estimate_and_strict() -> None:
+    usage = TokenUsage(input_tokens=10, output_tokens=3, total_tokens=13)
+
+    assert usage.usage_source == "local_deterministic_estimate"
+    with pytest.raises(ValidationError, match="Input should be 'local_deterministic_estimate'"):
+        TokenUsage(
+            input_tokens=10,
+            output_tokens=3,
+            total_tokens=13,
+            usage_source="server_billing",  # type: ignore[arg-type]
+        )

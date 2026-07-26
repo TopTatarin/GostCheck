@@ -21,6 +21,12 @@ class RuleSpec:
     max_total_chunks: int = 6
 
     def __post_init__(self) -> None:
+        if not self.rule_id or not self.section_roles or not self.requirement or not self.elements:
+            raise ValueError("semantic rule specification fields must be non-empty")
+        if len(set(self.section_roles)) != len(self.section_roles):
+            raise ValueError("semantic section roles must be unique")
+        if len(set(self.elements)) != len(self.elements):
+            raise ValueError("semantic element names must be unique")
         if self.max_chunks_per_section < 1 or self.max_total_chunks < 1:
             raise ValueError("semantic chunk limits must be positive")
 
@@ -43,6 +49,31 @@ _ROLE_ALIASES: dict[str, tuple[str, ...]] = {
         "цели и задач",
         "problem statement",
         "objectives",
+    ),
+    "review": (
+        "обзор научно технической",
+        "обзор нти",
+        "литературный обзор",
+        "literature review",
+        "related work",
+    ),
+    "system_analysis": (
+        "структурный системный анализ",
+        "системный анализ",
+        "модель as is",
+        "as is model",
+    ),
+    "math_model": (
+        "математическая модель",
+        "математическое моделирование",
+        "math model",
+        "mathematical model",
+    ),
+    "algorithm": (
+        "алгоритм",
+        "algorithm",
+        "псевдокод",
+        "pseudocode",
     ),
     "results": (
         "анализ результат",

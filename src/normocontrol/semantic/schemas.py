@@ -19,7 +19,22 @@ NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_len
 RuleId = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}-[0-9]{2}$")]
 SHA256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
-IMPLEMENTED_RULE_IDS = frozenset({"ANN-01", "INT-01", "TSK-01", "TSK-03", "CON-01", "GEN-01"})
+IMPLEMENTED_RULE_IDS = frozenset(
+    {
+        "ALG-01",
+        "ANN-01",
+        "CON-01",
+        "GEN-01",
+        "INT-01",
+        "MTH-02",
+        "REV-05",
+        "REV-06",
+        "SSA-04",
+        "TSK-01",
+        "TSK-02",
+        "TSK-03",
+    }
+)
 
 # Every current rubric rule whose layer contains the LLM capability. Keeping this
 # vocabulary explicit makes an unsupported rule visible instead of silently passing it.
@@ -227,11 +242,12 @@ class SemanticFinding(StrictModel):
 
 
 class TokenUsage(StrictModel):
-    """Token accounting stored without request or response text."""
+    """Locally estimated token accounting stored without request or response text."""
 
     input_tokens: int = Field(ge=0)
     output_tokens: int = Field(ge=0)
     total_tokens: int = Field(ge=0)
+    usage_source: Literal["local_deterministic_estimate"] = "local_deterministic_estimate"
 
     @model_validator(mode="after")
     def total_matches(self) -> Self:
