@@ -65,6 +65,8 @@ def test_run_help_lists_options(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "--out" in help_text
     assert "--only" in help_text
     assert "--final" in help_text
+    assert "--model" in help_text
+    assert "--base-url" in help_text
 
 
 def test_run_pass_demo_exit_zero(tmp_path: Path) -> None:

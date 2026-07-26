@@ -31,6 +31,8 @@ environment: local-gpu
 | `permissions: contents: read` | Minimal token |
 | No `pull_request` / `pull_request_target` | Untrusted PR code does not execute on self-hosted |
 | No `YANDEX_AI_API_KEY` on this job | Cloud secrets stay off the local runner |
+| Report retention is 7 days | Advisory diagnostics are not retained indefinitely |
+| Cleanup step uses `if: always()` | Checkout, temporary submission and reports are removed after upload or failure |
 
 If the runner is offline, the Ollama job stays queued. The formal workflow
 (`lint-and-unit`, `formal-gate`) continues independently.
@@ -39,15 +41,15 @@ If the runner is offline, the Ollama job stays queued. The formal workflow
 
 1. In GitHub: **Settings → Actions → Runners → New self-hosted runner → Windows**.
 2. Paste the **one-time** configure commands GitHub shows into an elevated PowerShell
-   on the GPU machine. **Do not commit the token** to the repository or this document.
-3. Example shape (replace with the live commands from GitHub UI):
+   on the GPU machine. **Do not commit the token, service credentials, generated
+   runner name or computer name** to the repository or this document.
+3. Use the live download, configure and service-install commands from GitHub UI.
+   Keep that transcript outside the repository. Its shape is intentionally not
+   reproduced here because it contains host-specific values and short-lived credentials.
 
 ```powershell
-# --- paste GitHub-generated download / extract commands here ---
-# --- paste GitHub-generated config command here (contains a one-time token) ---
-.\config.cmd --url https://github.com/<OWNER>/<REPO> --token <ONE_TIME_TOKEN> `
-  --labels "windows,x64,gpu,normocontrol" --name "normocontrol-gpu"
-# --- paste GitHub-generated run service install commands here ---
+# Run only the commands shown by GitHub in the local administrative shell.
+# Do not save the shell transcript under the GostCheck repository.
 ```
 
 4. Create environment **`local-gpu`** (Settings → Environments) and enable required
@@ -64,3 +66,8 @@ powershell -ExecutionPolicy Bypass -File scripts/semantic_ci.ps1 -Provider ollam
 
 `disabled` writes `build/semantic/status.json` without network. Ollama requires a
 running daemon and model (see [gpu-runbook.md](gpu-runbook.md)).
+
+After artifact upload, the self-hosted job changes to `${{ runner.temp }}`, rejects a
+drive-root path, verifies that the final `GITHUB_WORKSPACE` directory name matches
+`GITHUB_REPOSITORY`, and removes the workspace contents. The cleanup step is guarded by
+`if: always()`, so it also runs after test or upload failures.

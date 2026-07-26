@@ -290,7 +290,11 @@ def semantic_command(
     ] = None,
     model: Annotated[
         str | None,
-        typer.Option("--model", help="Модель для локального провайдера."),
+        typer.Option("--model", help="Модель или URI модели; CLI имеет приоритет."),
+    ] = None,
+    base_url: Annotated[
+        str | None,
+        typer.Option("--base-url", help="HTTP(S) endpoint; CLI имеет приоритет."),
     ] = None,
 ) -> None:
     """Run merge-safe semantic checks and emit a deterministic JSON report."""
@@ -299,6 +303,7 @@ def semantic_command(
     try:
         config = load_llm_config(
             provider_override=provider,
+            base_url_override=base_url,
             model_override=model,
             no_llm=no_llm,
         )
@@ -343,6 +348,14 @@ def run_command(
         str | None,
         typer.Option("--provider", help="disabled, ollama или yandex; CLI имеет приоритет."),
     ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="Модель или URI модели; CLI имеет приоритет."),
+    ] = None,
+    base_url: Annotated[
+        str | None,
+        typer.Option("--base-url", help="HTTP(S) endpoint; CLI имеет приоритет."),
+    ] = None,
     only: Annotated[
         list[str] | None,
         typer.Option(
@@ -376,6 +389,8 @@ def run_command(
             profile=profile,
             no_llm=global_no_llm or no_llm,
             provider=provider,
+            model=model,
+            base_url=base_url,
             only=only_filter,
             apply_final_severity=final,
             fail_closed=fail_closed,

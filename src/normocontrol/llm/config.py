@@ -86,15 +86,22 @@ def _parse_int(name: str, value: str) -> int:
 def load_llm_config(
     environ: Mapping[str, str] | None = None,
     *,
+    config_values: Mapping[str, object] | None = None,
     provider_override: str | None = None,
     base_url_override: str | None = None,
     model_override: str | None = None,
     no_llm: bool = False,
 ) -> LlmConfig:
-    """Resolve environment plus CLI overrides; explicit CLI values take precedence."""
+    """Resolve YAML defaults, environment, and CLI overrides in increasing priority."""
     values = os.environ if environ is None else environ
+    configured = {} if config_values is None else config_values
+    configured_provider = configured.get("provider", "disabled")
+    if not isinstance(configured_provider, str):
+        raise ConfigurationError("llm.provider in config must be a string")
     provider_raw = (
-        "disabled" if no_llm else provider_override or values.get("LLM_PROVIDER", "disabled")
+        "disabled"
+        if no_llm
+        else provider_override or values.get("LLM_PROVIDER") or configured_provider
     )
     try:
         provider = ProviderName(provider_raw.strip().casefold())
@@ -104,19 +111,31 @@ def load_llm_config(
     if provider is ProviderName.DISABLED:
         return LlmConfig(provider=provider)
 
-    if provider is ProviderName.YANDEX and model_override is not None:
-        raise ConfigurationError("Yandex model URI must be supplied through LLM_MODEL")
-
     default_url = OLLAMA_BASE_URL if provider is ProviderName.OLLAMA else YANDEX_BASE_URL
     default_model = OLLAMA_MODEL if provider is ProviderName.OLLAMA else ""
+    configured_url = configured.get("base_url")
+    configured_model = configured.get("model")
+    if configured_url is not None and not isinstance(configured_url, str):
+        raise ConfigurationError("llm.base_url in config must be a string or null")
+    if configured_model is not None and not isinstance(configured_model, str):
+        raise ConfigurationError("llm.model in config must be a string or null")
+    configured_cloud = configured.get("allow_cloud_data", False)
+    if not isinstance(configured_cloud, bool):
+        raise ConfigurationError("llm.allow_cloud_data in config must be true or false")
     raw_key = values.get("LLM_API_KEY", "")
     if provider is ProviderName.OLLAMA and not raw_key.strip():
         raw_key = "ollama"
 
+    cloud_raw = values.get("ALLOW_CLOUD_DATA", values.get("LLM_ALLOW_CLOUD_DATA"))
+    allow_cloud_data = (
+        configured_cloud if cloud_raw is None else _parse_bool("ALLOW_CLOUD_DATA", cloud_raw)
+    )
     payload = {
         "provider": provider,
-        "base_url": base_url_override or values.get("LLM_BASE_URL", default_url),
-        "model": model_override or values.get("LLM_MODEL", default_model),
+        "base_url": (
+            base_url_override or values.get("LLM_BASE_URL") or configured_url or default_url
+        ),
+        "model": model_override or values.get("LLM_MODEL") or configured_model or default_model,
         "api_key": SecretStr(raw_key),
         "timeout": _parse_float("LLM_TIMEOUT", values.get("LLM_TIMEOUT", "60")),
         "max_concurrency": _parse_int(
@@ -127,10 +146,7 @@ def load_llm_config(
             "LLM_MAX_OUTPUT_TOKENS",
             values.get("LLM_MAX_OUTPUT_TOKENS", str(OLLAMA_MAX_OUTPUT_TOKENS)),
         ),
-        "allow_cloud_data": _parse_bool(
-            "ALLOW_CLOUD_DATA",
-            values.get("ALLOW_CLOUD_DATA", values.get("LLM_ALLOW_CLOUD_DATA", "false")),
-        ),
+        "allow_cloud_data": allow_cloud_data,
     }
     try:
         return LlmConfig.model_validate(payload)

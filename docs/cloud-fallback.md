@@ -25,6 +25,9 @@ or the `backend` input on `workflow_dispatch`.
 - Real document text requires `allow_cloud_data=true` on dispatch **and**
   `ALLOW_CLOUD_DATA=true` in the job env. Without that flag the script publishes
   `status=cloud_blocked` and exits successfully (no network).
+- If opt-in is true but neither `YANDEX_AI_API_KEY` nor `LLM_API_KEY` is present,
+  the wrapper publishes `status=cloud_credentials_missing` without starting the
+  normocontrol subprocess.
 - Checkout is always trusted **`main`** tip (same as the GPU job).
 
 ## Local / CI script
@@ -44,7 +47,7 @@ powershell -ExecutionPolicy Bypass -File scripts/semantic_ci.ps1 -Provider yande
 
 Underlying process exits (including tool errors) are normalized to a green advisory
 job with an explicit `status` in `build/semantic/status.json`. `blocks_merge` is
-always `false`.
+always `false`. Uploaded report artifacts use seven-day retention.
 
 ## Branch protection
 

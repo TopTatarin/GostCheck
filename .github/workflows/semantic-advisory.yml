@@ -105,6 +105,30 @@ jobs:
           name: semantic-report-${{ github.sha }}
           path: build/semantic/
           if-no-files-found: warn
+          retention-days: 7
+      - name: Cleanup workspace and submission
+        if: always()
+        shell: pwsh
+        env:
+          CLEAN_RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          $workspace = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+          $root = [IO.Path]::GetPathRoot($workspace)
+          $expectedLeaf = ($env:GITHUB_REPOSITORY -split "/")[-1]
+          $actualLeaf = [IO.Path]::GetFileName($workspace.TrimEnd(
+            [IO.Path]::DirectorySeparatorChar,
+            [IO.Path]::AltDirectorySeparatorChar
+          ))
+          if (
+            $workspace -eq $root -or
+            [string]::IsNullOrWhiteSpace($expectedLeaf) -or
+            -not $actualLeaf.Equals($expectedLeaf, [StringComparison]::OrdinalIgnoreCase)
+          ) {
+            throw "Refusing to clean an unexpected GITHUB_WORKSPACE path."
+          }
+          Set-Location -LiteralPath $env:CLEAN_RUNNER_TEMP
+          Get-ChildItem -Force -LiteralPath $workspace |
+            Remove-Item -Recurse -Force
 
   semantic-yandex:
     name: semantic-yandex
@@ -141,6 +165,7 @@ jobs:
           name: semantic-report-${{ github.sha }}
           path: build/semantic/
           if-no-files-found: warn
+          retention-days: 7
 
   semantic-disabled:
     name: semantic-disabled
@@ -163,6 +188,7 @@ jobs:
           name: semantic-report-${{ github.sha }}
           path: build/semantic/
           if-no-files-found: warn
+          retention-days: 7
 
   publish-semantic:
     name: publish-semantic
@@ -234,3 +260,4 @@ jobs:
           name: semantic-aggregate-${{ github.sha }}
           path: build/semantic-publish/
           if-no-files-found: warn
+          retention-days: 7

@@ -48,6 +48,45 @@ def test_cli_override_wins_conflicting_environment_and_no_llm_wins_all() -> None
     assert disabled.provider is ProviderName.DISABLED
 
 
+def test_yaml_environment_and_cli_precedence_for_ollama() -> None:
+    config = load_llm_config(
+        {
+            "LLM_PROVIDER": "ollama",
+            "LLM_MODEL": "environment-model",
+            "LLM_BASE_URL": "http://127.0.0.3:11434/v1",
+        },
+        config_values={
+            "provider": "disabled",
+            "model": "yaml-model",
+            "base_url": "http://127.0.0.4:11434/v1",
+            "allow_cloud_data": False,
+        },
+        provider_override="ollama",
+        model_override="cli-model",
+        base_url_override="http://127.0.0.2:11434/v1",
+    )
+
+    assert config.provider is ProviderName.OLLAMA
+    assert config.model == "cli-model"
+    assert config.base_url == "http://127.0.0.2:11434/v1"
+
+
+def test_yaml_values_are_used_without_environment_or_cli_overrides() -> None:
+    config = load_llm_config(
+        {},
+        config_values={
+            "provider": "ollama",
+            "model": "yaml-model",
+            "base_url": "http://127.0.0.5:11434/v1",
+            "allow_cloud_data": False,
+        },
+    )
+
+    assert config.provider is ProviderName.OLLAMA
+    assert config.model == "yaml-model"
+    assert config.base_url == "http://127.0.0.5:11434/v1"
+
+
 def test_yandex_uses_fixed_defaults_and_requires_env_model_key_and_cloud_policy() -> None:
     config = load_llm_config(
         {
@@ -89,17 +128,19 @@ def test_invalid_yandex_configuration_is_sanitized(
     assert "unit-secret" not in str(captured.value)
 
 
-def test_yandex_model_uri_cannot_be_overridden_by_cli() -> None:
-    with pytest.raises(ConfigurationError, match="through LLM_MODEL"):
-        load_llm_config(
-            {
-                "LLM_PROVIDER": "yandex",
-                "LLM_MODEL": "gpt://folder/env",
-                "LLM_API_KEY": "key",
-                "ALLOW_CLOUD_DATA": "true",
-            },
-            model_override="gpt://folder/cli",
-        )
+def test_yandex_model_uri_can_be_overridden_by_cli_without_exposing_key() -> None:
+    config = load_llm_config(
+        {
+            "LLM_PROVIDER": "yandex",
+            "LLM_MODEL": "gpt://folder/env",
+            "LLM_API_KEY": "unit-super-secret",
+            "ALLOW_CLOUD_DATA": "true",
+        },
+        model_override="gpt://folder/cli",
+    )
+
+    assert config.model == "gpt://folder/cli"
+    assert "unit-super-secret" not in repr(config)
 
 
 @pytest.mark.parametrize(

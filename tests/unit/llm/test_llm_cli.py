@@ -10,7 +10,15 @@ from normocontrol.llm.base import ProbeResult
 runner = CliRunner()
 
 
-def test_llm_doctor_disabled_is_deterministic_and_offline() -> None:
+def test_llm_doctor_disabled_is_deterministic_and_offline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "OllamaProvider",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("no Ollama")),
+    )
+
     result = runner.invoke(app, ["llm", "doctor", "--provider", "disabled"])
 
     assert result.exit_code == 0

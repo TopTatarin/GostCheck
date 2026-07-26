@@ -34,8 +34,9 @@ Baseline demo помечает отчёты как **exploratory / legacy-input*
 
 ## Retention
 
-- GitHub Actions artifacts: по политике организации (удаляйте вручную при необходимости).
+- Semantic GitHub Actions artifacts: 7 дней; исходная ВКР в artifact не загружается.
 - Consumer artifact содержит отчёты и технические diagnostics, но не исходный PDF
   или дерево LaTeX. Настройте минимальный допустимый retention в private repository.
-- Не храните production thesis PDF на self-hosted runner дольше прогона; чистите
-  workspace между jobs.
+- Не храните production thesis PDF на self-hosted runner дольше прогона. GPU workflow
+  очищает workspace шагом `if: always()` после загрузки отчёта; проверка пути не даёт
+  cleanup удалить корень диска или каталог, не соответствующий `GITHUB_REPOSITORY`.

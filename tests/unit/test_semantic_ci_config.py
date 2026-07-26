@@ -131,6 +131,58 @@ def test_yandex_without_allow_cloud_skips_network(
     assert payload["status"] == "cloud_blocked"
 
 
+def test_yandex_opt_in_without_key_skips_subprocess(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        semantic_ci.subprocess,
+        "run",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("no subprocess")),
+    )
+    out = tmp_path / "cloud-no-key"
+
+    result = semantic_ci.run_semantic_ci(
+        provider="yandex",
+        out_dir=out,
+        allow_cloud_data=True,
+        environ={},
+    )
+
+    assert result.status == "cloud_credentials_missing"
+    payload = json.loads((out / "status.json").read_text(encoding="utf-8"))
+    assert payload["status"] == "cloud_credentials_missing"
+    assert payload["blocks_merge"] is False
+
+
+def test_ollama_wrapper_invokes_real_cli_module(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(
+        args: list[str],
+        *,
+        check: bool,
+        env: dict[str, str],
+    ) -> subprocess.CompletedProcess:
+        captured.update(args=args, check=check, env=env)
+        return subprocess.CompletedProcess(args=args, returncode=0)
+
+    monkeypatch.setattr(semantic_ci.subprocess, "run", fake_run)
+    result = semantic_ci.run_semantic_ci(
+        provider="ollama",
+        out_dir=tmp_path / "ollama",
+        environ={"LLM_MODEL": "synthetic-model"},
+    )
+
+    args = captured["args"]
+    assert isinstance(args, list)
+    assert args[:3] == [sys.executable, "-m", "normocontrol.cli"]
+    assert result.status == "ok"
+
+
 def test_main_unknown_backend_exits_one() -> None:
     code = semantic_ci.main(["--provider", "nope", "--out", str(ROOT / "build" / "tmp-bad")])
     assert code == 1
@@ -140,7 +192,7 @@ def test_workflow_has_no_pull_request_and_no_pull_request_target() -> None:
     payload = _load_workflow()
     triggers = payload.get("on", payload.get(True))
     assert triggers is not None
-    assert "workflow_dispatch" in triggers
+    assert set(triggers) == {"workflow_dispatch"}
     assert "pull_request" not in triggers
     assert "pull_request_target" not in triggers
     assert payload["permissions"] == {"contents": "read"}
@@ -157,6 +209,37 @@ def test_ollama_job_requires_main_environment_and_self_hosted() -> None:
     assert "secrets.YANDEX_AI_API_KEY" not in ollama_section
     assert "${{ secrets." not in ollama_section
     assert "pull_request" not in ollama_section
+
+
+def test_ollama_cleanup_is_unconditional_and_path_guarded() -> None:
+    payload = _load_workflow()
+    steps = payload["jobs"]["semantic-ollama"]["steps"]
+    cleanup = next(step for step in steps if step["name"] == "Cleanup workspace and submission")
+
+    assert cleanup["if"] == "always()"
+    assert "GITHUB_WORKSPACE" in cleanup["run"]
+    assert "GITHUB_REPOSITORY" in cleanup["run"]
+    assert "GetPathRoot" in cleanup["run"]
+    assert cleanup["env"]["CLEAN_RUNNER_TEMP"] == "${{ runner.temp }}"
+    assert "Remove-Item -Recurse -Force" in cleanup["run"]
+
+
+def test_report_uploads_have_bounded_retention_and_exclude_sources() -> None:
+    payload = _load_workflow()
+    uploads = [
+        step
+        for job in payload["jobs"].values()
+        for step in job["steps"]
+        if str(step.get("uses", "")).startswith("actions/upload-artifact@")
+    ]
+
+    assert uploads
+    for upload in uploads:
+        assert upload["if"] == "always()"
+        assert upload["with"]["retention-days"] == 7
+        path = upload["with"]["path"]
+        assert path.startswith("build/")
+        assert not path.endswith((".pdf", ".tex"))
 
 
 def test_yandex_job_uses_cloud_environment_and_secret() -> None:

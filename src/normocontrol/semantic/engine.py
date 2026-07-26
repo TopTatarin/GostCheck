@@ -156,7 +156,7 @@ class SemanticEngine:
         attempts = 0
         input_tokens = 0
         output_tokens = 0
-        response: SemanticResponse | None = None
+        finding: SemanticFinding | None = None
         diagnostic = DiagnosticCode.INVALID_SCHEMA
 
         for attempt in range(2):
@@ -169,8 +169,12 @@ class SemanticEngine:
                 raw = self._provider.request(request_messages, SemanticResponse)
                 candidate = SemanticResponse.model_validate(raw)
                 self._validate_response_for_batch(candidate, batch.spec)
-                response = candidate
                 output_tokens += estimate_tokens(candidate.model_dump_json())
+                verified = self._verified_finding(candidate, batch)
+                if verified.diagnostic is DiagnosticCode.INVALID_EVIDENCE:
+                    diagnostic = DiagnosticCode.INVALID_EVIDENCE
+                    continue
+                finding = verified
                 break
             except LlmUnavailableError as error:
                 if self._provider.name == "disabled":
@@ -187,7 +191,7 @@ class SemanticEngine:
                 diagnostic = DiagnosticCode.PROVIDER_ERROR
                 break
 
-        if response is None:
+        if finding is None:
             finding = SemanticFinding(
                 rule_id=batch.spec.rule_id,
                 status=SemanticStatus.UNVERIFIABLE,
@@ -195,9 +199,6 @@ class SemanticEngine:
                 summary=self._diagnostic_summary(diagnostic),
                 diagnostic=diagnostic,
             )
-        else:
-            finding = self._verified_finding(response, batch)
-
         audit = BatchAudit(
             rule_id=batch.spec.rule_id,
             section_ids=tuple(sorted(batch.audit_section_ids)),
@@ -275,6 +276,9 @@ class SemanticEngine:
             ),
             DiagnosticCode.INVALID_RESPONSE: (
                 "LLM дважды не вернул ответ по строгой схеме; результат нельзя проверить."
+            ),
+            DiagnosticCode.INVALID_EVIDENCE: (
+                "LLM дважды вернул неподтверждённые цитаты; результат нельзя проверить."
             ),
         }
         return summaries.get(code, "Результат семантической проверки нельзя подтвердить.")
