@@ -1,0 +1,283 @@
+name: Reusable thesis validation
+
+on:
+  workflow_call:
+    inputs:
+      submission_path:
+        description: Relative path to a LaTeX project, .tex file, or PDF in the caller repository
+        required: true
+        type: string
+      profile:
+        description: Explicit GostCheck work profile (software or research)
+        required: false
+        type: string
+        default: software
+      fail_closed:
+        description: Treat unavailable formal/build checks as blocking
+        required: false
+        type: boolean
+        default: true
+      upload_report:
+        description: Upload redacted reports and technical diagnostics
+        required: false
+        type: boolean
+        default: true
+      provider:
+        description: Advisory semantic provider (disabled, ollama, or yandex)
+        required: false
+        type: string
+        default: disabled
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-unit:
+    name: lint-and-unit
+    runs-on: ubuntu-latest
+    outputs:
+      submission_path: ${{ steps.path.outputs.submission_path }}
+    steps:
+      - name: Checkout consumer repository
+        uses: actions/checkout@v7
+        with:
+          path: consumer
+          persist-credentials: false
+      - name: Checkout pinned GostCheck implementation
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .gostcheck
+          persist-credentials: false
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Validate typed inputs and submission path
+        id: path
+        env:
+          SUBMISSION_PATH: ${{ inputs.submission_path }}
+          PROFILE: ${{ inputs.profile }}
+          PROVIDER: ${{ inputs.provider }}
+        run: |
+          set -euo pipefail
+          case "$PROFILE" in
+            software|research) ;;
+            *) echo "::error::profile must be software or research"; exit 3 ;;
+          esac
+          case "$PROVIDER" in
+            disabled|ollama|yandex) ;;
+            *) echo "::error::provider must be disabled, ollama, or yandex"; exit 3 ;;
+          esac
+          python .gostcheck/.github/actions/setup-normocontrol/validate_submission_path.py \
+            --workspace "$GITHUB_WORKSPACE/consumer" \
+            --submission "$SUBMISSION_PATH" \
+            --github-output "$GITHUB_OUTPUT"
+
+  formal-gate:
+    name: formal-gate
+    needs: [lint-and-unit]
+    runs-on: ubuntu-24.04
+    outputs:
+      gate: ${{ steps.formal.outputs.gate }}
+      submission_path: ${{ steps.path.outputs.submission_path }}
+    steps:
+      - name: Checkout consumer repository
+        uses: actions/checkout@v7
+        with:
+          path: consumer
+          persist-credentials: false
+      - name: Checkout pinned GostCheck implementation
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .gostcheck
+          persist-credentials: false
+      - name: Setup normocontrol
+        uses: ./.gostcheck/.github/actions/setup-normocontrol
+        with:
+          project-root: .gostcheck
+          install-tex: "true"
+      - name: Revalidate submission path
+        id: path
+        env:
+          SUBMISSION_PATH: ${{ inputs.submission_path }}
+        run: |
+          set -euo pipefail
+          python .gostcheck/.github/actions/setup-normocontrol/validate_submission_path.py \
+            --workspace "$GITHUB_WORKSPACE/consumer" \
+            --submission "$SUBMISSION_PATH" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Run formal gate on requested submission
+        id: formal
+        continue-on-error: true
+        env:
+          FAIL_CLOSED: ${{ inputs.fail_closed && 'true' || 'false' }}
+          PROFILE: ${{ inputs.profile }}
+          SUBMISSION_RELATIVE: ${{ steps.path.outputs.submission_path }}
+        run: |
+          set -uo pipefail
+          out_dir="$GITHUB_WORKSPACE/build/normocontrol"
+          mkdir -p "$out_dir"
+          args=(
+            run "$GITHUB_WORKSPACE/consumer/$SUBMISSION_RELATIVE"
+            --config "$GITHUB_WORKSPACE/.gostcheck/normocontrol.yaml.example"
+            --rubric "$GITHUB_WORKSPACE/.gostcheck/rubric.yaml"
+            --out "$out_dir"
+            --profile "$PROFILE"
+            --no-llm
+            --only build
+            --only formal
+            --only aggregate
+          )
+          if [ "$FAIL_CLOSED" = "true" ]; then
+            args+=(--fail-closed)
+          fi
+          set +e
+          normocontrol "${args[@]}" >"$out_dir/technical.log" 2>&1
+          code=$?
+          set -e
+          case "$code" in
+            0) gate=PASS ;;
+            2) gate=FAIL ;;
+            *) gate=ERROR ;;
+          esac
+          {
+            echo "exit_code=$code"
+            echo "gate=$gate"
+          } >> "$GITHUB_OUTPUT"
+          echo "GostCheck gate: $gate (exit code $code)"
+      - name: Upload reports and technical logs
+        if: ${{ always() && inputs.upload_report }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: normocontrol-report-${{ github.sha }}
+          path: |
+            build/normocontrol/report.json
+            build/normocontrol/report.md
+            build/normocontrol/run_state.json
+            build/normocontrol/stages/*.json
+            build/normocontrol/technical.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Enforce formal exit code
+        if: always()
+        env:
+          EXIT_CODE: ${{ steps.formal.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          test -n "$EXIT_CODE"
+          exit "$EXIT_CODE"
+
+  semantic-advisory:
+    name: semantic-advisory
+    needs: [lint-and-unit]
+    if: ${{ inputs.provider != 'disabled' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout consumer repository
+        uses: actions/checkout@v7
+        with:
+          path: consumer
+          persist-credentials: false
+      - name: Checkout pinned GostCheck implementation
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .gostcheck
+          persist-credentials: false
+      - name: Setup normocontrol
+        uses: ./.gostcheck/.github/actions/setup-normocontrol
+        with:
+          project-root: .gostcheck
+      - name: Revalidate advisory submission path
+        id: path
+        env:
+          SUBMISSION_PATH: ${{ inputs.submission_path }}
+        run: |
+          set -euo pipefail
+          python .gostcheck/.github/actions/setup-normocontrol/validate_submission_path.py \
+            --workspace "$GITHUB_WORKSPACE/consumer" \
+            --submission "$SUBMISSION_PATH" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Run non-blocking semantic checks
+        env:
+          PROFILE: ${{ inputs.profile }}
+          PROVIDER: ${{ inputs.provider }}
+          SUBMISSION_RELATIVE: ${{ steps.path.outputs.submission_path }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/build/semantic"
+          normocontrol run "$GITHUB_WORKSPACE/consumer/$SUBMISSION_RELATIVE" \
+            --config "$GITHUB_WORKSPACE/.gostcheck/normocontrol.yaml.example" \
+            --rubric "$GITHUB_WORKSPACE/.gostcheck/rubric.yaml" \
+            --out "$GITHUB_WORKSPACE/build/semantic" \
+            --profile "$PROFILE" \
+            --provider "$PROVIDER" \
+            --only semantic \
+            --only aggregate \
+            >"$RUNNER_TEMP/gostcheck-semantic-advisory.log" 2>&1
+
+  publish-report:
+    name: publish-report
+    needs: [formal-gate]
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Publish or refresh metadata-only PR comment
+        continue-on-error: true
+        uses: actions/github-script@v8
+        env:
+          CHECKED_PATH: >-
+            ${{ needs.formal-gate.outputs.submission_path || inputs.submission_path }}
+          COMMIT_SHA: ${{ github.sha }}
+          PROFILE: ${{ inputs.profile }}
+          GATE: ${{ needs.formal-gate.outputs.gate || 'ERROR' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const marker = "<!-- normocontrol-reusable-report -->";
+            const escapeHtml = (value) => value
+              .replaceAll("&", "&amp;")
+              .replaceAll("<", "&lt;")
+              .replaceAll(">", "&gt;")
+              .replaceAll('"', "&quot;")
+              .replaceAll("'", "&#39;");
+            const body = [
+              marker,
+              "## GostCheck formal gate: " + process.env.GATE,
+              "",
+              "- Checked path: <code>" + escapeHtml(process.env.CHECKED_PATH) + "</code>",
+              "- Commit SHA: `" + process.env.COMMIT_SHA + "`",
+              "- Profile: `" + process.env.PROFILE + "`",
+              "- Gate: `" + process.env.GATE + "`",
+              "- Run: [open workflow run](" + process.env.RUN_URL + ")",
+              "",
+              "The comment contains metadata only; download the report artifact for findings.",
+            ].join("\n");
+            const {owner, repo} = context.repo;
+            const issue_number = context.issue.number;
+            try {
+              const comments = await github.paginate(
+                github.rest.issues.listComments,
+                {owner, repo, issue_number, per_page: 100},
+              );
+              const existing = comments.find((comment) =>
+                comment.user?.type === "Bot" && comment.body?.includes(marker)
+              );
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner, repo, comment_id: existing.id, body,
+                });
+              } else {
+                await github.rest.issues.createComment({owner, repo, issue_number, body});
+              }
+            } catch (error) {
+              core.warning("PR comment unavailable; formal result and artifact are unchanged.");
+            }

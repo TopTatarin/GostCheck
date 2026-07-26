@@ -15,6 +15,65 @@ Semantic/LLM jobs are intentionally **not** in this workflow and must never be r
 See [`.github/workflows/semantic-advisory.yml`](../.github/workflows/semantic-advisory.yml),
 [self-hosted-runner.md](self-hosted-runner.md), and [cloud-fallback.md](cloud-fallback.md).
 
+## Reusable workflow for a private thesis repository
+
+The public GostCheck repository keeps its own synthetic self-tests in
+`.github/workflows/normocontrol.yml`. A consumer repository calls the separate
+`.github/workflows/reusable-thesis.yml` workflow through its `workflow_call`
+trigger. The consumer checkout is the source of `submission_path`; the reusable
+workflow never substitutes `tests/fixtures/demo/pass` or
+`tests/fixtures/demo/fail`.
+
+Use a private repository for the thesis and pin GostCheck to a reviewed commit
+SHA or an immutable release tag. The following is a complete consumer workflow
+for `.github/workflows/thesis.yml`:
+
+```yaml
+name: Thesis formal validation
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  thesis:
+    uses: TopTatarin/GostCheck/.github/workflows/reusable-thesis.yml@v0.2.0
+    with:
+      submission_path: thesis/main.tex
+      profile: software
+      fail_closed: true
+      upload_report: true
+      provider: disabled
+```
+
+For the strongest supply-chain pin, replace `v0.2.0` with the full 40-character
+pinned commit SHA that contains the reviewed reusable workflow. Do not use a
+moving branch such as `main`. The caller grants only `contents: read` for
+checkouts and `pull-requests: write` for the metadata-only PR comment. Do not
+use `pull_request_target`.
+
+`submission_path` is relative to the root of the private consumer checkout and
+may identify a project directory, `.tex`, or `.pdf`. The workflow rejects an
+absolute path, `..`, NUL/control characters, missing targets, unsupported file
+types, and a symlink or junction that resolves outside the checkout. Both the
+preflight job and `formal-gate` validate the path; `formal-gate` runs
+`normocontrol run` on that resolved consumer input.
+
+Allowed profiles are `software` and `research`. `fail_closed: true` is the safe
+default. `provider: disabled` keeps document text local to the runner. Any
+semantic provider remains advisory: it is not in the required formal dependency
+chain and must not be configured as a required branch-protection check.
+
+When `upload_report` is true, the artifact contains `report.json`, `report.md`,
+`run_state.json`, stage JSON diagnostics, and a technical log. Its path list
+does not include the submitted `.tex`, source tree, or PDF. The PR comment
+contains only the checked relative path, caller commit SHA, profile, gate, and
+run URL. It never copies report findings or thesis content.
+
 ## Triggers and safety
 
 - `pull_request`, `workflow_dispatch`
@@ -86,6 +145,10 @@ Required status checks on `main`:
 2. `formal-gate`
 
 Do **not** require `build-latex`, `publish-report`, or any semantic job.
+
+In a private consumer repository, require the reusable `lint-and-unit` and
+`formal-gate` results after confirming their exact names in a completed run.
+Keep `publish-report` and every semantic/advisory result non-required.
 
 ## Local checks
 

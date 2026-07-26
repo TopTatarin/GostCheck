@@ -1,5 +1,22 @@
 # Troubleshooting
 
+## Reusable workflow rejects submission_path
+
+**Symptom:** consumer preflight or `formal-gate` reports
+`invalid submission_path`.
+**Action:** pass a path relative to the private repository root, for example
+`thesis/main.tex` or `submissions/current.pdf`. Do not pass an absolute path,
+`..`, a NUL/control character, or a missing target. A symlink or Windows
+junction may point within the checkout, but any escape outside the consumer
+workspace is rejected. Confirm that the private caller checks out the file and
+that its case matches exactly on Linux.
+
+If the submitted project is valid but the action cannot install GostCheck,
+confirm the consumer pins a release tag or full commit SHA containing both
+`.github/workflows/reusable-thesis.yml` and the nested setup action. Do not
+replace the private `submission_path` with a public synthetic fixture to make
+the gate green.
+
 ## latexmk / chktex missing
 
 **Symptom:** `doctor` shows not found, or CI fails during TeX setup.

@@ -15,6 +15,7 @@ from normocontrol.tools.latexmk import LatexBuildResult, LatexBuildService, Late
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "normocontrol.yml"
+REUSABLE_WORKFLOW = ROOT / ".github" / "workflows" / "reusable-thesis.yml"
 SETUP_ACTION = ROOT / ".github" / "actions" / "setup-normocontrol" / "action.yml"
 GITHUB_ACTIONS_DOC = ROOT / "docs" / "github-actions.md"
 LATEX_FIXTURES = ROOT / "tests" / "fixtures" / "latex-ci"
@@ -71,6 +72,123 @@ def test_workflow_permissions_and_triggers() -> None:
     assert publish_perms["contents"] == "read"
 
 
+def test_reusable_workflow_call_inputs_are_typed_and_safe() -> None:
+    payload = _load_yaml(REUSABLE_WORKFLOW)
+    triggers = payload.get("on", payload.get(True))
+    assert set(triggers) == {"workflow_call"}
+    inputs = triggers["workflow_call"]["inputs"]
+    assert inputs["submission_path"] == {
+        "description": (
+            "Relative path to a LaTeX project, .tex file, or PDF in the caller repository"
+        ),
+        "required": True,
+        "type": "string",
+    }
+    assert inputs["profile"]["type"] == "string"
+    assert inputs["profile"]["default"] == "software"
+    assert inputs["fail_closed"]["type"] == "boolean"
+    assert inputs["fail_closed"]["default"] is True
+    assert inputs["upload_report"]["type"] == "boolean"
+    assert inputs["upload_report"]["default"] is True
+    assert inputs["provider"]["type"] == "string"
+    assert inputs["provider"]["default"] == "disabled"
+    assert "pull_request_target" not in triggers
+
+
+def test_reusable_workflow_has_minimal_permissions_and_separate_self_tests() -> None:
+    reusable = _load_yaml(REUSABLE_WORKFLOW)
+    assert reusable["permissions"] == {"contents": "read"}
+    publish = reusable["jobs"]["publish-report"]
+    assert publish["permissions"] == {"pull-requests": "write"}
+    assert _load_yaml(WORKFLOW)["name"] == "Normocontrol"
+    assert "workflow_call" not in (
+        _load_yaml(WORKFLOW).get("on", _load_yaml(WORKFLOW).get(True))
+    )
+    engine_checkouts = [
+        step
+        for job in reusable["jobs"].values()
+        for step in job["steps"]
+        if step.get("name") == "Checkout pinned GostCheck implementation"
+    ]
+    assert len(engine_checkouts) == 3
+    assert all(
+        step["with"]["repository"] == "${{ job.workflow_repository }}"
+        and step["with"]["ref"] == "${{ job.workflow_sha }}"
+        and step["with"]["persist-credentials"] is False
+        for step in engine_checkouts
+    )
+
+
+def test_reusable_formal_gate_uses_requested_submission() -> None:
+    payload = _load_yaml(REUSABLE_WORKFLOW)
+    jobs = payload["jobs"]
+    formal = jobs["formal-gate"]
+    assert formal["needs"] == ["lint-and-unit"]
+    assert "semantic" not in formal["needs"]
+    semantic = jobs["semantic-advisory"]
+    assert semantic["needs"] == ["lint-and-unit"]
+    assert semantic["continue-on-error"] is True
+    assert "formal-gate" not in semantic["needs"]
+
+    validate = _step_by_name(formal, "Revalidate submission path")
+    assert validate["env"]["SUBMISSION_PATH"] == "${{ inputs.submission_path }}"
+    run = _step_by_name(formal, "Run formal gate on requested submission")
+    script = run["run"]
+    assert 'run "$GITHUB_WORKSPACE/consumer/$SUBMISSION_RELATIVE"' in script
+    assert "--profile \"$PROFILE\"" in script
+    assert "--no-llm" in script
+    assert "--only formal" in script
+    assert "--only aggregate" in script
+    assert "--provider" not in script
+    assert "tests/fixtures/demo/pass" not in script
+    assert "tests/fixtures/demo/fail" not in script
+
+    semantic_script = _step_by_name(semantic, "Run non-blocking semantic checks")["run"]
+    assert "--provider \"$PROVIDER\"" in semantic_script
+    assert "--only semantic" in semantic_script
+
+
+def test_reusable_artifact_excludes_consumer_source_and_pdf() -> None:
+    payload = _load_yaml(REUSABLE_WORKFLOW)
+    upload = _step_by_name(
+        payload["jobs"]["formal-gate"],
+        "Upload reports and technical logs",
+    )
+    paths = upload["with"]["path"].splitlines()
+    assert "build/normocontrol/report.json" in paths
+    assert "build/normocontrol/report.md" in paths
+    assert "build/normocontrol/technical.log" in paths
+    assert all("consumer/" not in path for path in paths)
+    assert all(not path.casefold().endswith((".pdf", ".tex")) for path in paths)
+    assert upload["if"] == "${{ always() && inputs.upload_report }}"
+
+
+def test_reusable_comment_is_metadata_only_and_names_actual_input() -> None:
+    payload = _load_yaml(REUSABLE_WORKFLOW)
+    publish = payload["jobs"]["publish-report"]
+    comment = _step_by_name(publish, "Publish or refresh metadata-only PR comment")
+    env = comment["env"]
+    assert "needs.formal-gate.outputs.submission_path" in env["CHECKED_PATH"]
+    assert "inputs.submission_path" in env["CHECKED_PATH"]
+    assert env["COMMIT_SHA"] == "${{ github.sha }}"
+    assert env["PROFILE"] == "${{ inputs.profile }}"
+    assert "${{ github.run_id }}" in env["RUN_URL"]
+    script = comment["with"]["script"]
+    for label in ("Checked path", "Commit SHA", "Profile", "Gate", "Run"):
+        assert label in script
+    assert "report.md" not in script
+    assert "summary.json" not in script
+
+
+def test_reusable_workflow_does_not_echo_secrets_or_source_content() -> None:
+    text = REUSABLE_WORKFLOW.read_text(encoding="utf-8")
+    assert "secrets." not in text
+    assert "echo ${{" not in text
+    assert "pull_request_target" not in text
+    assert "cat $SUBMISSION" not in text
+    assert "tee " not in text
+
+
 def test_every_uploaded_artifact_uses_always() -> None:
     payload = _load_yaml(WORKFLOW)
     uploads = [
@@ -96,6 +214,14 @@ def test_setup_installs_and_verifies_minimal_tex_toolchain() -> None:
     payload = _load_yaml(SETUP_ACTION)
     assert payload["inputs"]["install-python"]["default"] == "true"
     assert payload["inputs"]["install-tex"]["default"] == "false"
+    assert payload["inputs"]["project-root"]["default"] == "."
+    dependencies = next(
+        step
+        for step in payload["runs"]["steps"]
+        if step["name"] == "Install locked dependencies"
+    )
+    assert dependencies["env"]["PROJECT_ROOT"] == "${{ inputs.project-root }}"
+    assert "${{ inputs.project-root }}" not in dependencies["run"]
     install = next(
         step for step in payload["runs"]["steps"] if step["name"] == "Install TeX toolchain"
     )
