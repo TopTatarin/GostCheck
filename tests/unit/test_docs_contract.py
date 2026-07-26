@@ -102,6 +102,37 @@ def test_latex_gate_docs_match_hard_ci_contract() -> None:
     assert "Times New Roman absent on CI" in troubleshooting
 
 
+def test_reusable_consumer_workflow_documentation_contract() -> None:
+    actions = (ROOT / "docs" / "github-actions.md").read_text(encoding="utf-8")
+    privacy = (ROOT / "docs" / "privacy.md").read_text(encoding="utf-8")
+    troubleshooting = (ROOT / "docs" / "troubleshooting.md").read_text(encoding="utf-8")
+
+    assert ".github/workflows/reusable-thesis.yml" in actions
+    assert "workflow_call" in actions
+    assert "TopTatarin/GostCheck/.github/workflows/reusable-thesis.yml@v0.2.0" in actions
+    for item in (
+        "submission_path: thesis/main.tex",
+        "profile: software",
+        "fail_closed: true",
+        "upload_report: true",
+        "provider: disabled",
+        "contents: read",
+        "pull-requests: write",
+    ):
+        assert item in actions
+    assert "private repository" in actions
+    assert "pinned commit SHA" in actions
+    assert "pull_request_target" in actions
+    assert "semantic" in actions.lower()
+    assert "required" in actions.lower()
+
+    assert "private thesis repository" in privacy
+    assert "protected submission store" in privacy
+    assert "public GostCheck repository" in privacy
+    assert "symlink" in troubleshooting
+    assert "submission_path" in troubleshooting
+
+
 def test_local_markdown_links_resolve() -> None:
     """Relative repo links in key docs must point at existing files (no network)."""
     files = [
