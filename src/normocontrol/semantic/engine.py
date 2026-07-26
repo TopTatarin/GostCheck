@@ -21,6 +21,7 @@ from normocontrol.semantic.rules.introduction import INT_01
 from normocontrol.semantic.rules.mathematics import MTH_02, MTH_03
 from normocontrol.semantic.rules.results import RES_01
 from normocontrol.semantic.rules.review import REV_05, REV_06
+from normocontrol.semantic.rules.structure import STR_05
 from normocontrol.semantic.rules.style import GEN_01, GEN_02
 from normocontrol.semantic.rules.system_analysis import SSA_04
 from normocontrol.semantic.rules.task_detail import TSK_02
@@ -59,6 +60,7 @@ RULE_SPECS: dict[str, RuleSpec] = {
         REV_05,
         REV_06,
         SSA_04,
+        STR_05,
         TSK_01,
         TSK_02,
         TSK_03,
@@ -198,7 +200,7 @@ class SemanticEngine:
 
         audit = BatchAudit(
             rule_id=batch.spec.rule_id,
-            section_ids=tuple(sorted(section.section_id for section in batch.sections)),
+            section_ids=tuple(sorted(batch.audit_section_ids)),
             chunk_ids=tuple(sorted(chunk.chunk_id for chunk in batch.chunks)),
             prompt_sha256=rendered.sha256,
             model_id=self._model_id,

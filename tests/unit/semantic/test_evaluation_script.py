@@ -27,6 +27,6 @@ def test_offline_evaluation_script_writes_reproducible_metrics(
     assert report.schema_validity == 1.0
     assert report.evidence_validity == 1.0
     assert report.useful_advisory_rate == 1.0
-    assert report.implemented_rule_count == 19
-    assert report.not_implemented_rule_count == 6
+    assert report.implemented_rule_count == 20
+    assert report.not_implemented_rule_count == 5
     assert all(errors == () for errors in report.errors_by_rule_id.values())

@@ -75,7 +75,7 @@ def test_mock_evaluation_is_reproducible_and_fully_verified() -> None:
     assert first.evidence_validity == 1.0
     assert first.useful_advisory_rate == 1.0
     assert first.implemented_rule_count == len(IMPLEMENTED_RULE_IDS)
-    assert first.not_implemented_rule_count == 6
+    assert first.not_implemented_rule_count == 5
     assert set(first.errors_by_rule_id) == IMPLEMENTED_RULE_IDS
     assert all(errors == () for errors in first.errors_by_rule_id.values())
     assert "Объект исследования" not in first.model_dump_json()

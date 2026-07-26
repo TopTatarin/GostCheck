@@ -29,6 +29,7 @@ from normocontrol.extract.base import (
 from normocontrol.extract.chunking import Chunker
 from normocontrol.extract.sections import SectionDetector
 from normocontrol.llm.base import ChatMessage, LlmProvider, ProbeResult
+from normocontrol.semantic.batching import BatchPlanner
 from normocontrol.semantic.engine import RULE_SPECS, SemanticEngine
 from normocontrol.semantic.evidence import normalize_quote
 from normocontrol.semantic.schemas import (
@@ -79,6 +80,7 @@ class SyntheticSection(StrictModel):
 
     title: NonEmptyString
     body: NonEmptyString
+    level: int = Field(default=1, ge=1)
 
 
 class SemanticExpectation(StrictModel):
@@ -222,7 +224,7 @@ def build_synthetic_bundle(fixture: SyntheticSemanticFixture) -> DocumentBundle:
         headings.append(
             HeadingCandidate(
                 title=section.title,
-                level=1,
+                level=section.level,
                 char_start=char_start,
                 origin="synthetic_fixture",
             )
@@ -300,8 +302,9 @@ class AnnotatedSemanticProvider(LlmProvider):
         if quote is None:
             raise ValueError("annotated evidence is missing")
         normalized = normalize_quote(quote)
+        allowed_chunks = BatchPlanner().plan(self._bundle, spec).chunks
         owner = next(
-            (chunk for chunk in self._bundle.chunks if normalized in normalize_quote(chunk.text)),
+            (chunk for chunk in allowed_chunks if normalized in normalize_quote(chunk.text)),
             None,
         )
         if owner is None:

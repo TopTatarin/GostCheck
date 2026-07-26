@@ -294,7 +294,6 @@ def test_remaining_semantic_rules_are_explicitly_not_implemented() -> None:
         "SSA-01",
         "SSA-02",
         "SSA-03",
-        "STR-05",
     }
     report = SemanticEngine(QueueProvider([])).run(make_bundle(), deferred)
 
