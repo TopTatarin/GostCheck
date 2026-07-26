@@ -178,6 +178,7 @@ class Orchestrator:
             if request.only.includes_stage(StageName.SEMANTIC) and not request.no_llm:
                 semantic_stage, semantic_findings = self._stage_semantic(
                     request=request,
+                    config=config,
                     bundle=artifacts.bundle if artifacts is not None else None,
                     cache=cache,
                     base_key=base_key,
@@ -619,6 +620,7 @@ class Orchestrator:
         self,
         *,
         request: RunRequest,
+        config: NormocontrolConfig,
         bundle: DocumentBundle | None,
         cache: StageCache,
         base_key: dict[str, str],
@@ -643,7 +645,10 @@ class Orchestrator:
 
         try:
             llm_config = load_llm_config(
+                config_values=config.llm.model_dump(),
                 provider_override=request.provider,
+                base_url_override=request.base_url,
+                model_override=request.model,
                 no_llm=request.no_llm,
             )
         except ConfigurationError as error:

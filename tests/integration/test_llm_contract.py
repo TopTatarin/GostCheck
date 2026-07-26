@@ -7,12 +7,16 @@ from pathlib import Path
 import httpx
 import pytest
 
+import normocontrol.orchestrator as orchestrator_module
+from normocontrol.domain import ExitCode
 from normocontrol.evaluation.semantic import build_synthetic_bundle, load_semantic_corpus
 from normocontrol.llm.base import AdvisoryStatus, ChatMessage, LlmResult, StrictModel
-from normocontrol.llm.config import load_llm_config
+from normocontrol.llm.config import LlmConfig, load_llm_config
 from normocontrol.llm.disabled import DisabledProvider
 from normocontrol.llm.ollama import OllamaProvider
 from normocontrol.llm.yandex import YandexProvider
+from normocontrol.orchestrator import run_pipeline
+from normocontrol.run_context import RunRequest, parse_only
 from normocontrol.semantic.batching import BatchPlanner
 from normocontrol.semantic.engine import RULE_SPECS, SemanticEngine
 from normocontrol.semantic.schemas import (
@@ -107,6 +111,86 @@ def test_three_providers_share_one_non_blocking_domain_contract() -> None:
     assert results[1].data == expected
     assert results[2].advisory is not None
     assert results[2].advisory.status is AdvisoryStatus.SKIPPED
+
+
+def test_disabled_provider_runs_formal_gate_without_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden_provider(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("disabled provider must not construct a network client")
+
+    monkeypatch.setattr(orchestrator_module, "OllamaProvider", forbidden_provider)
+    monkeypatch.setattr(orchestrator_module, "YandexProvider", forbidden_provider)
+    root = Path(__file__).resolve().parents[2]
+    report = run_pipeline(
+        RunRequest(
+            source=root / "tests" / "fixtures" / "pdf" / "fmt_pass.pdf",
+            out_dir=tmp_path / "disabled",
+            config_path=root / "normocontrol.yaml.example",
+            rubric_path=root / "rubric.yaml",
+            provider="disabled",
+            only=parse_only(("FMT-01",)),
+            tool_version="contract-test",
+        )
+    )
+
+    formal = next(stage for stage in report.stages if stage.name == "formal")
+    semantic = next(stage for stage in report.stages if stage.name == "semantic")
+    assert report.exit_code is ExitCode.SUCCESS
+    assert formal.findings
+    assert all(finding.rule_id == "FMT-01" for finding in formal.findings)
+    assert all(finding.status.value == "skipped" for finding in semantic.findings)
+
+
+def test_pipeline_uses_yaml_model_and_endpoint_without_source_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[LlmConfig] = []
+
+    class CapturingOllama(DisabledProvider):
+        def __init__(self, config: LlmConfig) -> None:
+            captured.append(config)
+
+    for name in (
+        "LLM_PROVIDER",
+        "LLM_MODEL",
+        "LLM_BASE_URL",
+        "ALLOW_CLOUD_DATA",
+        "LLM_ALLOW_CLOUD_DATA",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(orchestrator_module, "OllamaProvider", CapturingOllama)
+    root = Path(__file__).resolve().parents[2]
+    config_path = tmp_path / "normocontrol.yaml"
+    config_text = (root / "normocontrol.yaml.example").read_text(encoding="utf-8")
+    config_path.write_text(
+        config_text.replace(
+            "provider: disabled\n  model: qwen3:8b-q4_K_M\n"
+            "  base_url: http://127.0.0.1:11434/v1",
+            "provider: ollama\n  model: yaml-contract-model\n"
+            "  base_url: http://127.0.0.9:11434/v1",
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_pipeline(
+        RunRequest(
+            source=root / "tests" / "fixtures" / "pdf" / "fmt_pass.pdf",
+            out_dir=tmp_path / "yaml-provider",
+            config_path=config_path,
+            rubric_path=root / "rubric.yaml",
+            only=parse_only(("FMT-01",)),
+            tool_version="contract-test",
+        )
+    )
+
+    assert report.exit_code is ExitCode.SUCCESS
+    assert len(captured) == 1
+    provider_config = captured[0]
+    assert provider_config.model == "yaml-contract-model"
+    assert provider_config.base_url == "http://127.0.0.9:11434/v1"
 
 
 @pytest.mark.parametrize(

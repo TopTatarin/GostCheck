@@ -122,11 +122,13 @@ def test_batch1_fabricated_quote_and_wrong_chunk_are_removed(
         chunk_id=chunk_id,
     )
 
-    finding = SemanticEngine(QueueProvider([payload])).run(make_bundle(), (rule_id,)).findings[0]
+    report = SemanticEngine(QueueProvider([payload, payload])).run(make_bundle(), (rule_id,))
+    finding = report.findings[0]
 
     assert finding.status is SemanticStatus.UNVERIFIABLE
     assert finding.diagnostic is DiagnosticCode.INVALID_EVIDENCE
     assert finding.evidence == ()
+    assert report.batches[0].attempts == 2
 
 
 @pytest.mark.parametrize("rule_id", BATCH1_RULE_IDS)

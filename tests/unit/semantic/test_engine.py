@@ -74,12 +74,36 @@ def test_invalid_duplicate_and_cross_section_evidence_downgrades_result(
         chunk_id="annotation:1",
     )
     payload["evidence"] = evidence
-    report = SemanticEngine(QueueProvider([payload])).run(make_bundle(), ("ANN-01",))
+    report = SemanticEngine(QueueProvider([payload, payload])).run(make_bundle(), ("ANN-01",))
     finding = report.findings[0]
 
     assert finding.status is SemanticStatus.UNVERIFIABLE
     assert finding.diagnostic is DiagnosticCode.INVALID_EVIDENCE
     assert finding.evidence == ()
+    assert report.batches[0].attempts == 2
+
+
+def test_invalid_evidence_is_repaired_once_then_succeeds() -> None:
+    invalid = response_payload(
+        "TSK-01",
+        RULE_SPECS["TSK-01"].elements,
+        quote="изменённая цитата",
+        chunk_id="постановка-задачи:1",
+    )
+    repaired = response_payload(
+        "TSK-01",
+        RULE_SPECS["TSK-01"].elements,
+        quote="Цель измерима",
+        chunk_id="постановка-задачи:1",
+    )
+    provider = QueueProvider([invalid, repaired])
+
+    report = SemanticEngine(provider).run(make_bundle(), ("TSK-01",))
+
+    assert report.findings[0].status is SemanticStatus.PASS
+    assert report.findings[0].diagnostic is None
+    assert report.batches[0].attempts == 2
+    assert "single allowed repair attempt" in provider.calls[1][-1].content
 
 
 def test_schema_is_repaired_once_then_succeeds() -> None:

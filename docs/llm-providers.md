@@ -6,8 +6,10 @@ merge и не создают `fail`.
 
 ## Конфигурация
 
-Настройки читаются из окружения. Явные CLI-параметры имеют приоритет над окружением, а
-глобальный `--no-llm` имеет приоритет над всеми остальными значениями.
+Настройки читаются из секции `llm` YAML-конфига и окружения. Приоритет:
+`--no-llm` → явные CLI-параметры → окружение → YAML → безопасные defaults.
+Команды `run`, `semantic` и `llm doctor` принимают `--provider`, `--model` и
+`--base-url` (где применимо); API-ключ остаётся только в окружении.
 
 | Переменная | Назначение | Ollama по умолчанию |
 | --- | --- | --- |
@@ -49,6 +51,9 @@ locator — GostCheck вычисляет точный диапазон цита�
 ```powershell
 $env:LLM_PROVIDER = "ollama"
 normocontrol llm doctor
+normocontrol run tests/fixtures/demo/pass --config normocontrol.yaml.example `
+  --provider ollama --model qwen3:8b-q4_K_M `
+  --base-url http://127.0.0.1:11434/v1
 ```
 
 `llm doctor` сначала вызывает `/models`, затем делает минимальный synthetic schema-probe.
@@ -95,8 +100,9 @@ Semantic wrapper различает `section_missing`, `invalid_schema`, `invali
 
 ## Yandex AI Studio
 
-Endpoint по умолчанию — `https://ai.api.cloud.yandex.net/v1`. URI модели и ключ обязательны в
-окружении. Облачный вызов запрещён, пока `ALLOW_CLOUD_DATA=true` не задан явно.
+Endpoint по умолчанию — `https://ai.api.cloud.yandex.net/v1`. URI модели задаётся через
+YAML, `LLM_MODEL` или `--model`; ключ обязателен в окружении. Облачный вызов запрещён,
+пока `ALLOW_CLOUD_DATA=true` не задан явно.
 
 ```powershell
 $env:LLM_PROVIDER = "yandex"

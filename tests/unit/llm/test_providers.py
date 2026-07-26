@@ -116,6 +116,10 @@ def test_profiles_send_json_schema_and_return_same_typed_response(
     assert captured[0]["stream"] is False
     if provider_name is ProviderName.OLLAMA:
         assert captured[0]["think"] is False
+        assert all(
+            "/no_think" not in str(message["content"])
+            for message in captured[0]["messages"]  # type: ignore[index, union-attr]
+        )
         schema = captured[0]["format"]
         assert isinstance(schema, dict)
         assert schema["additionalProperties"] is False
@@ -147,6 +151,27 @@ def test_markdown_fenced_json_is_accepted() -> None:
     )
 
     assert provider.request(MESSAGES, Answer).score == 3
+
+
+def test_malformed_native_response_is_advisory() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b"{not-json",
+            headers={"content-type": "application/json"},
+            request=request,
+        )
+
+    provider = OllamaProvider(
+        load_llm_config({"LLM_PROVIDER": "ollama"}),
+        http_client=make_http_client(handler),
+    )
+
+    result = provider.complete(MESSAGES, Answer)
+
+    assert result.advisory is not None
+    assert result.advisory.status is AdvisoryStatus.UNVERIFIABLE
+    assert "invalid API response" in result.advisory.reason
 
 
 @pytest.mark.parametrize(

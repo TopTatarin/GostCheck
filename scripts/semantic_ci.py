@@ -127,8 +127,9 @@ def _run_normocontrol(
     source: Path,
     out_dir: Path,
     allow_cloud_data: bool,
+    environ: Mapping[str, str] | None = None,
 ) -> int:
-    env = os.environ.copy()
+    env = dict(os.environ if environ is None else environ)
     env["LLM_PROVIDER"] = provider
     env["LLM_BACKEND"] = provider
     if provider == "yandex":
@@ -139,7 +140,7 @@ def _run_normocontrol(
     cmd = [
         sys.executable,
         "-m",
-        "normocontrol",
+        "normocontrol.cli",
         "run",
         str(source),
         "--provider",
@@ -165,6 +166,7 @@ def run_semantic_ci(
 ) -> AdvisoryResult:
     """Execute advisory semantic CI for one backend and always return a result."""
     backend = resolve_backend(cli_provider=provider, environ=environ)
+    env = os.environ if environ is None else environ
     if backend == "disabled":
         write_disabled_artifact(out_dir)
         return AdvisoryResult(
@@ -184,11 +186,24 @@ def run_semantic_ci(
         write_advisory_artifact(out_dir, result)
         return result
 
+    if backend == "yandex" and not (
+        env.get("LLM_API_KEY", "").strip() or env.get("YANDEX_AI_API_KEY", "").strip()
+    ):
+        result = AdvisoryResult(
+            provider="yandex",
+            status="cloud_credentials_missing",
+            reason="Yandex API key is not configured; cloud advisory skipped",
+            process_exit=0,
+        )
+        write_advisory_artifact(out_dir, result)
+        return result
+
     code = _run_normocontrol(
         provider=backend,
         source=source,
         out_dir=out_dir,
         allow_cloud_data=allow_cloud_data,
+        environ=environ,
     )
     result = normalize_advisory_exit(code, provider=backend)
     write_advisory_artifact(out_dir, result)

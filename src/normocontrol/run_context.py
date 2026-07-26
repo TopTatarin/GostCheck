@@ -93,6 +93,8 @@ class RunRequest:
     apply_final_severity: bool = False
     fail_closed: bool = False
     tool_version: str = "0.1.0"
+    base_url: str | None = None
+    model: str | None = None
 
 
 @dataclass(slots=True)
