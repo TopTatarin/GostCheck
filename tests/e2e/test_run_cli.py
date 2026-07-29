@@ -28,11 +28,20 @@ CONFIG = ROOT / "normocontrol.yaml.example"
 
 runner = CliRunner()
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_TOP_LEVEL_FINDING_RE = re.compile(r"(?m)^- \*\*[A-Z]{3}-\d{2}\*\*")
+_GLUED_FINDING_RE = re.compile(r"[^\r\n]- \*\*[A-Z]{3}-\d{2}\*\*")
+_TRUNCATED_GLUE_RE = re.compile(r"\[TRUNCATED\]- \*\*")
 
 
 def _plain(text: str) -> str:
     """Strip ANSI; Typer Rich help splits ``--out`` across color spans under GITHUB_ACTIONS."""
     return _ANSI_RE.sub("", text)
+
+
+def _assert_report_findings_are_separated(markdown: str) -> None:
+    assert _TOP_LEVEL_FINDING_RE.search(markdown) is not None
+    assert _GLUED_FINDING_RE.search(markdown) is None
+    assert _TRUNCATED_GLUE_RE.search(markdown) is None
 
 
 class _SuccessBuild(LatexBuildService):
@@ -127,6 +136,7 @@ def test_run_fail_demo_exit_two(tmp_path: Path) -> None:
     assert "gate: FAIL" in result.stdout
     assert "blocking_findings:" in result.stdout
     assert "exit_code: 2 (formal gate failed)" in result.stdout
+    _assert_report_findings_are_separated((out / "report.md").read_text(encoding="utf-8"))
 
 
 def test_run_unknown_only_exit_three(tmp_path: Path) -> None:

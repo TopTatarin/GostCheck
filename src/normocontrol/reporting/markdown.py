@@ -19,6 +19,10 @@ DEFAULT_SUMMARY_LIMIT = 60_000
 _FORMAL_LAYERS = frozenset({"class", "script", "class+script"})
 
 
+def _sanitize_code_span(value: object) -> str:
+    return sanitize_evidence_text(str(value)).replace(r"\`", "'")
+
+
 def _template_env(templates_dir: Path | None = None) -> Environment:
     root = templates_dir or Path(__file__).resolve().parents[3] / "templates"
     return Environment(
@@ -49,11 +53,13 @@ def group_findings(findings: Sequence[Mapping[str, Any]]) -> dict[str, list[dict
             quote = entry.get("description") or entry.get("quote") or ""
             evidence.append(
                 {
-                    "locator": entry.get("locator", ""),
+                    "locator": _sanitize_code_span(entry.get("locator", "")),
                     "quote": sanitize_evidence_text(str(quote)),
                 }
             )
         item["evidence"] = evidence
+        for key in ("rule_id", "severity", "status", "fingerprint", "recommendation"):
+            item[key] = sanitize_evidence_text(str(item.get(key, "")))
         item["message"] = sanitize_evidence_text(message)
         if "APPROVAL_REQUIRED" in message.upper():
             groups["approvals_required"].append(item)

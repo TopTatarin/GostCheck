@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
@@ -37,6 +39,9 @@ from normocontrol.reporting.redaction import redact_structure, redact_text, sani
 
 ROOT = Path(__file__).resolve().parents[3]
 SNAPSHOTS = ROOT / "tests" / "snapshots"
+TOP_LEVEL_FINDING_RE = re.compile(r"(?m)^- \*\*[A-Z]{3}-\d{2}\*\*")
+GLUED_FINDING_RE = re.compile(r"[^\r\n]- \*\*[A-Z]{3}-\d{2}\*\*")
+TRUNCATED_GLUE_RE = re.compile(r"\[TRUNCATED\]- \*\*")
 
 
 def _finding(**overrides: object) -> Finding:
@@ -59,6 +64,20 @@ def _report(*findings: Finding, exit_code: ExitCode = ExitCode.FORMAL_FAILURE) -
         exit_code=exit_code,
         stages=(StageResult(name="formal", findings=findings),),
     )
+
+
+def _published(*findings: Finding) -> dict[str, Any]:
+    return build_published_report(
+        _report(*findings),
+        ReportMeta(commit_sha="abc1234", profile="software", repo_root=ROOT),
+        clock=lambda: datetime(2026, 7, 24, tzinfo=UTC),
+    )
+
+
+def _assert_findings_are_separated(markdown: str, *, expected: int) -> None:
+    assert len(TOP_LEVEL_FINDING_RE.findall(markdown)) == expected
+    assert GLUED_FINDING_RE.search(markdown) is None
+    assert TRUNCATED_GLUE_RE.search(markdown) is None
 
 
 def test_schema_validation_pass_fail_mixed_degraded() -> None:
@@ -235,6 +254,108 @@ def test_evidence_markdown_and_malicious_details_are_sanitized() -> None:
     cleaned = sanitize_evidence_text(dirty)
     assert "</details>" not in cleaned
     assert "```" not in cleaned
+
+
+def test_markdown_separates_adjacent_findings() -> None:
+    markdown = render_markdown(
+        _published(
+            _finding(rule_id="FMT-04", message="First short finding"),
+            _finding(rule_id="FMT-05", message="Second short finding"),
+        )
+    )
+
+    _assert_findings_are_separated(markdown, expected=2)
+
+
+def test_markdown_separates_one_hundred_collapsed_findings() -> None:
+    markdown = render_markdown(
+        _published(
+            *(
+                _finding(rule_id=f"FMT-{index:02d}", message=f"Finding {index}")
+                for index in range(100)
+            )
+        )
+    )
+
+    assert "<details>" in markdown
+    assert "<summary>100 items (click to expand)</summary>" in markdown
+    _assert_findings_are_separated(markdown, expected=100)
+
+
+def test_truncated_message_cannot_touch_next_finding() -> None:
+    markdown = render_markdown(
+        _published(
+            _finding(rule_id="FMT-04", message="long message " * 100),
+            _finding(rule_id="FMT-05", message="Next finding"),
+        )
+    )
+
+    assert "[TRUNCATED]" in markdown
+    _assert_findings_are_separated(markdown, expected=2)
+
+
+def test_markdown_sanitizes_multiline_content_and_keeps_evidence_nested() -> None:
+    markdown = render_markdown(
+        _published(
+            _finding(
+                rule_id="FMT-04",
+                message="Без evidence",
+                evidence=(),
+            ),
+            _finding(
+                rule_id="FMT-05",
+                message=(
+                    "Юникод\n- **FMT-99** <script>alert(1)</script> "
+                    "**bold** [link](https://example.invalid)"
+                ),
+                evidence=(
+                    Evidence(
+                        locator="page:2\n`escape`",
+                        description="Первая строка\n<details>unsafe</details>",
+                    ),
+                    Evidence(
+                        locator="page:3",
+                        description="Вторая **цитата**",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    _assert_findings_are_separated(markdown, expected=2)
+    evidence_lines = [line for line in markdown.splitlines() if "evidence:" in line]
+    assert len(evidence_lines) == 2
+    assert all(line.startswith("  - evidence:") for line in evidence_lines)
+    assert all(line.count("`") == 2 for line in evidence_lines)
+    first_start = markdown.index("- **FMT-04**")
+    second_start = markdown.index("- **FMT-05**")
+    assert "evidence:" not in markdown[first_start:second_start]
+    assert "Юникод" in markdown
+    assert "<script>" not in markdown
+    assert "<details>" not in "\n".join(evidence_lines)
+    assert r"\*\*bold\*\*" in markdown
+    assert r"\[link\]" in markdown
+
+
+def test_full_markdown_report_snapshot() -> None:
+    published = _published(
+        _finding(rule_id="FMT-04", message="First finding", evidence=()),
+        _finding(
+            rule_id="FMT-05",
+            message="Second finding",
+            evidence=(
+                Evidence(locator="page:2", description="First quote"),
+                Evidence(locator="page:3", description="Second quote"),
+            ),
+        ),
+    )
+    for index, finding in enumerate(published["findings"], start=1):
+        finding["recommendation"] = f"Review finding {index}."
+
+    markdown = render_markdown(published)
+    actual = markdown if markdown.endswith("\n") else f"{markdown}\n"
+
+    assert actual == (SNAPSHOTS / "report-markdown.md").read_text(encoding="utf-8")
 
 
 def test_publish_writes_all_artifacts(tmp_path: Path) -> None:
