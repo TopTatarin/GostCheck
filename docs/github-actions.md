@@ -24,9 +24,10 @@ trigger. The consumer checkout is the source of `submission_path`; the reusable
 workflow never substitutes `tests/fixtures/demo/pass` or
 `tests/fixtures/demo/fail`.
 
-Use a private repository for the thesis and pin GostCheck to a reviewed commit
-SHA or an immutable release tag. The following is a complete consumer workflow
-for `.github/workflows/thesis.yml`:
+Use a private repository for the thesis and pin GostCheck to one exact
+40-character commit SHA. The same SHA must appear in the reusable-workflow
+reference and in `gostcheck_sha`. The following is a complete consumer workflow
+for `.github/workflows/thesis.yml`; replace the example SHA in both places:
 
 ```yaml
 name: Thesis formal validation
@@ -41,8 +42,9 @@ permissions:
 
 jobs:
   thesis:
-    uses: TopTatarin/GostCheck/.github/workflows/reusable-thesis.yml@v0.2.0
+    uses: TopTatarin/GostCheck/.github/workflows/reusable-thesis.yml@0123456789abcdef0123456789abcdef01234567
     with:
+      gostcheck_sha: 0123456789abcdef0123456789abcdef01234567
       submission_path: thesis/main.tex
       profile: software
       fail_closed: true
@@ -50,11 +52,13 @@ jobs:
       provider: disabled
 ```
 
-For the strongest supply-chain pin, replace `v0.2.0` with the full 40-character
-pinned commit SHA that contains the reviewed reusable workflow. Do not use a
-moving branch such as `main`. The caller grants only `contents: read` for
-checkouts and `pull-requests: write` for the metadata-only PR comment. Do not
-use `pull_request_target`.
+Replace both occurrences of the example value with the same full pinned commit SHA
+that contains the reusable workflow. A branch, tag, short SHA, uppercase value, or
+moving reference such as `main` is rejected. The explicit duplicate pin is a
+compatibility measure that lets the called workflow check out its own
+implementation without confusing it with the caller repository. The caller
+grants only `contents: read` for checkouts and `pull-requests: write` for the
+metadata-only PR comment. Do not use `pull_request_target`.
 
 `submission_path` is relative to the root of the private consumer checkout and
 may identify a project directory, `.tex`, or `.pdf`. The workflow rejects an

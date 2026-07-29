@@ -142,7 +142,9 @@ def test_reusable_consumer_workflow_documentation_contract() -> None:
 
     assert ".github/workflows/reusable-thesis.yml" in actions
     assert "workflow_call" in actions
-    assert "TopTatarin/GostCheck/.github/workflows/reusable-thesis.yml@v0.2.0" in actions
+    example_sha = "0123456789abcdef0123456789abcdef01234567"
+    assert "TopTatarin/GostCheck/.github/workflows/reusable-thesis.yml@" + example_sha in actions
+    assert f"gostcheck_sha: {example_sha}" in actions
     for item in (
         "submission_path: thesis/main.tex",
         "profile: software",
