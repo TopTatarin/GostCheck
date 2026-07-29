@@ -113,6 +113,18 @@ path-free section-locator evidence. A missing repository URL is informational;
 it never creates a blocking failure. A URL elsewhere in the document does not
 satisfy the rule, and a document without an appendix is `not_applicable`.
 
+## Annotation counters
+
+ANN-03 requires a LaTeX project and compiled PDF metrics. It extracts all four
+declared quantities from the annotation: pages, figures, tables, and appendices.
+Physical PDF pages are counted from the extracted page map; float and appendix
+counters are derived from comment- and literal-safe expanded LaTeX structure.
+PASS is emitted only when every declaration is present, unambiguous, and equal
+to its corresponding fact. Missing or conflicting declarations and unreliable
+page metrics are `unverifiable`; mismatches retain the effective rubric severity,
+including `severity_final` on final runs. Evidence is the path-free annotation
+section locator.
+
 ## Fingerprints
 
 Each finding can be serialized with a stable SHA-256 fingerprint over its JSON

@@ -5,11 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import fitz
 import pytest
 
 from normocontrol.domain import ExitCode, FindingStatus
 from normocontrol.extract.base import DocumentBundle, PageInfo, Section, SectionKind
 from normocontrol.extract.latex import LatexExtractor
+from normocontrol.extract.pdf import PdfExtractor
 from normocontrol.rubric.expansion import expand_rubric
 from normocontrol.rubric.loader import load_config, load_rubric
 from normocontrol.rubric.models import WorkProfile
@@ -174,6 +176,52 @@ def test_str04_warns_on_volume_outside_range() -> None:
     )
     _, findings = _run_fixture("pass", bundle=bundle)
     assert FindingStatus.WARN in _statuses(findings, "STR-04")
+
+
+def test_ann03_compares_latex_counters_with_extracted_pdf_pages(tmp_path: Path) -> None:
+    main_tex = tmp_path / "main.tex"
+    main_tex.write_text(
+        (
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\section{Аннотация}\n"
+            "Работа содержит 3 страницы, 1 рисунок, 1 таблицу и 1 приложение.\n"
+            "\\section{Основной раздел}\n"
+            "\\begin{figure}\\caption{Synthetic}\\end{figure}\n"
+            "\\begin{table}\\caption{Synthetic}\\end{table}\n"
+            "\\appendix\n"
+            "\\section{Приложение А}\n"
+            "Synthetic appendix.\n"
+            "\\end{document}\n"
+        ),
+        encoding="utf-8",
+    )
+    pdf_path = tmp_path / "main.pdf"
+    document = fitz.open()
+    for _ in range(3):
+        document.new_page(width=595, height=842)
+    document.save(pdf_path)
+    document.close()
+
+    config = load_config(CONFIG_PATH)
+    rubric = _effective_rubric().model_copy(
+        update={"rules": tuple(rule for rule in _effective_rubric().rules if rule.id == "ANN-03")}
+    )
+    context = ExecutionContext(
+        rubric=rubric,
+        config=config,
+        bundle=LatexExtractor(tmp_path).extract(main_tex),
+        latex=LatexProject(root=tmp_path, main_tex=main_tex),
+        pdf_path=pdf_path,
+        bib_paths=(),
+        pdf_bundle=PdfExtractor(tmp_path).extract(pdf_path),
+    )
+
+    finding = FormalEngine(default_formal_registry()).run(context).findings[0]
+
+    assert finding.rule_id == "ANN-03"
+    assert finding.status is FindingStatus.PASS
+    assert finding.evidence
 
 
 def test_sys03_unverifiable_when_latexmk_missing(monkeypatch: pytest.MonkeyPatch) -> None:
