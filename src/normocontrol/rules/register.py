@@ -13,6 +13,7 @@ from normocontrol.rules.formulas import formula_rules
 from normocontrol.rules.monolith import monolith_rules
 from normocontrol.rules.registry import RuleRegistry
 from normocontrol.rules.review import review_rules
+from normocontrol.rules.section_floats import section_float_rules
 from normocontrol.rules.structure import structure_rules
 from normocontrol.rules.system import system_rules
 from normocontrol.rules.tables import tables_rules
@@ -34,6 +35,7 @@ def register_d02_rules(
         *annotation_rules(),
         *appendix_rules(),
         *algorithm_rules(),
+        *section_float_rules(),
     )
     for rule in rules:
         registry.register(rule)

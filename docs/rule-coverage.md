@@ -48,14 +48,14 @@ records a written decision.
 | REV-05 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | REV-06 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | REV-07 | script | formal | formal suite | implemented | Registered deterministic check. |
-| SSA-01 | script+llm | semantic | semantic suite | implemented | Semantic model/notation contract implemented; formal figure check is pending. |
+| SSA-01 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped figure presence plus advisory model/notation contract. |
 | SSA-02 | llm | semantic | semantic suite | implemented | Conditional software applicability and integration contract. |
 | SSA-03 | llm | semantic | semantic suite | implemented | Conditional computational applicability and data-table contract. |
 | SSA-04 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | TSK-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | TSK-02 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal heuristic is pending. |
 | TSK-03 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
-| ARC-01 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal figure check is pending. |
+| ARC-01 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped figure presence plus advisory as-is/to-be rationale. |
 | ARC-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | MTH-01 | class+script | formal | formal suite | implemented | Registered deterministic check. |
 | MTH-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
@@ -65,7 +65,7 @@ records a written decision.
 | ALG-03 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped «Блок N.» regex plus advisory completeness. |
 | IMP-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | IMP-02 | vision | — | — | pending_decision | Vision/manual scope needs a signed reviewer decision. |
-| RES-01 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal presence check is pending. |
+| RES-01 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped table/figure presence plus advisory result checklist. |
 | CON-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | APP-01 | script | formal | formal suite | implemented | Deterministic Git repository URL check limited to appendix sections. |
 | GEN-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
@@ -77,5 +77,5 @@ records a written decision.
 No written reviewer decisions are present for `ALG-02` or `IMP-02`; therefore they
 remain `pending_decision`, not `manual_required` or `excluded_scope`. `DEP-01`
 requires written approval of the oral norm before implementation. The incomplete
-formal portions of `ARC-01`, `RES-01`, `SSA-01`, and `TSK-02` are also recorded
-above and are not silently treated as covered by their semantic implementations.
+formal portion of `TSK-02` is also recorded above and is not silently treated as
+covered by its semantic implementation.
