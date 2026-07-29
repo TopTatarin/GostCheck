@@ -105,6 +105,14 @@ cannot be established reliably from span geometry. A PDF without a text layer
 therefore produces a blocking incomplete result rather than PASS. Corrupt and
 password-protected PDFs are rejected during extraction.
 
+## Appendix repository link
+
+APP-01 runs on both LaTeX- and PDF-derived bundles. It searches only sections
+identified as appendices, accepts recognizable Git repository URLs, and emits
+path-free section-locator evidence. A missing repository URL is informational;
+it never creates a blocking failure. A URL elsewhere in the document does not
+satisfy the rule, and a document without an appendix is `not_applicable`.
+
 ## Fingerprints
 
 Each finding can be serialized with a stable SHA-256 fingerprint over its JSON
@@ -120,5 +128,3 @@ engine = FormalEngine(registry)
 result = engine.run(context)
 assert result.exit_code in {0, 2}
 ```
-
-Individual rule implementations are registered in later tasks (`D-02` … `D-05`).
