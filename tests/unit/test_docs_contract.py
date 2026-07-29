@@ -26,6 +26,7 @@ REQUIRED_DOC_FILES = (
     "docs/troubleshooting.md",
     "docs/privacy.md",
     "docs/acceptance.md",
+    "docs/source-submissions.md",
     ".github/dependabot.yml",
     ".github/CODEOWNERS",
     "scripts/release_check.py",
@@ -100,6 +101,38 @@ def test_latex_gate_docs_match_hard_ci_contract() -> None:
     assert "biber parse error" in troubleshooting
     assert "ChkTeX blocks formal-gate" in troubleshooting
     assert "Times New Roman absent on CI" in troubleshooting
+
+
+def test_source_submission_contract_is_documented() -> None:
+    contract = (ROOT / "docs" / "source-submissions.md").read_text(encoding="utf-8")
+    windows = (ROOT / "docs" / "setup-windows.md").read_text(encoding="utf-8")
+    acceptance = (ROOT / "docs" / "acceptance.md").read_text(encoding="utf-8")
+
+    for token in (
+        "readable `.pdf`",
+        "`main.tex`",
+        "`--root`",
+        "class/style",
+        "bibliography",
+        "images",
+        "includes",
+        "exit `2`",
+        "exit `3`",
+        "UNVERIFIABLE",
+    ):
+        assert token in contract
+    for command in (
+        "latexmk --version",
+        "chktex --version",
+        "xelatex --version",
+        "biber --version",
+    ):
+        assert command in windows
+    assert "Git Bash" in windows
+    assert "PowerShell" in windows
+    assert "GOSTCHECK_ACCEPTANCE_MISIS_SOURCE" in acceptance
+    assert "GOSTCHECK_ACCEPTANCE_SALARY_SOURCE" in acceptance
+    assert "GOSTCHECK_ACCEPTANCE_SECTIONS_SOURCE" in acceptance
 
 
 def test_reusable_consumer_workflow_documentation_contract() -> None:

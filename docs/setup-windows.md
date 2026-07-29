@@ -39,3 +39,35 @@ NFD filenames are supported, but cloud-synced folders can lock files during buil
 python -m pytest -q -m "not live"
 normocontrol run tests/fixtures/demo/pass --provider disabled --out build/demo-pass
 ```
+
+## Локальные TeX-инструменты
+
+GostCheck не устанавливает TeX Live/MiKTeX автоматически. После отдельной установки
+проверьте фактически доступные команды; `command not found`/`not recognized`
+означает, что соответствующая проверка будет `UNVERIFIABLE`/degraded.
+
+Git Bash:
+
+```bash
+latexmk --version
+chktex --version
+xelatex --version
+biber --version
+command -v xelatex lualatex pdflatex
+normocontrol doctor
+```
+
+PowerShell:
+
+```powershell
+latexmk --version
+chktex --version
+xelatex --version
+biber --version
+Get-Command xelatex,lualatex,pdflatex -ErrorAction SilentlyContinue
+normocontrol doctor
+```
+
+Допустим любой установленный TeX engine, поддерживаемый проектом; для текущего
+формального CI-контракта предпочтителен XeLaTeX. Статус `OK` нельзя предполагать:
+источником истины служит фактический вывод команд и `normocontrol doctor`.

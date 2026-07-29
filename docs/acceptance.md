@@ -54,3 +54,20 @@ git tag -a v0.1.0 -m "GostCheck PoC v0.1.0"
 | Араик (docs/release) | | |
 | Reviewer | | |
 | Нормоконтролёр (demo) | | |
+
+## Opt-in source acceptance
+
+Внешние проекты не копируются в обычный unit CI и не добавляются в git. Локальные
+пути передаются только через environment variables:
+
+```bash
+export GOSTCHECK_ACCEPTANCE_MISIS_SOURCE=/path/to/full-misis-project
+export GOSTCHECK_ACCEPTANCE_SALARY_SOURCE=/path/to/pinned-salary-checkout/docs/latex
+export GOSTCHECK_ACCEPTANCE_SECTIONS_SOURCE=/path/to/incomplete-sections
+python -m pytest -q -m acceptance tests/acceptance
+```
+
+`GOSTCHECK_ACCEPTANCE_SALARY_SOURCE` должен находиться в checkout commit
+`7532373195a841101d40ccf953cbdf59a103ce8d`. Если переменная не задана, test
+пропускается с явной причиной. Временные clone/output создаются вне репозитория
+или под игнорируемым `build/` и удаляются после проверки.

@@ -47,6 +47,8 @@ def test_run_latex_with_includegraphics_and_input_exit_zero(
         encoding="utf-8",
     )
     (project / "chapter.tex").write_text("Included chapter.", encoding="utf-8")
+    (project / "figures").mkdir()
+    (project / "figures" / "a.png").write_bytes(b"synthetic-image-placeholder")
     out = tmp_path / "out"
 
     result = CliRunner().invoke(
@@ -69,3 +71,107 @@ def test_run_latex_with_includegraphics_and_input_exit_zero(
     assert result.exit_code == int(ExitCode.SUCCESS), result.stdout + result.stderr
     assert "textwidth]" not in result.stdout + result.stderr
     assert (out / "report.json").is_file()
+
+
+def test_run_directory_with_explicit_nested_root_exit_zero(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_pipeline(request, hooks=None):  # type: ignore[no-untyped-def]
+        del hooks
+        return run_pipeline(request, OrchestratorHooks(build_service=_SuccessBuild()))
+
+    monkeypatch.setattr(cli, "run_pipeline", fake_pipeline)
+    project = tmp_path / "project"
+    source = project / "thesis" / "root.tex"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "\\documentclass{article}\n\\begin{document}\n\\input{chapter}\n\\end{document}\n",
+        encoding="utf-8",
+    )
+    (source.parent / "chapter.tex").write_text("Included chapter.", encoding="utf-8")
+    out = tmp_path / "out"
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "--no-llm",
+            "run",
+            str(project),
+            "--root",
+            "thesis/root.tex",
+            "--config",
+            str(CONFIG),
+            "--rubric",
+            str(RUBRIC),
+            "--out",
+            str(out),
+            "--only",
+            "BIB",
+        ],
+    )
+
+    assert result.exit_code == int(ExitCode.SUCCESS), result.stdout + result.stderr
+    assert (out / "report.json").is_file()
+
+
+def test_run_incomplete_directory_exit_three_is_actionable_and_private(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "private-sections"
+    project.mkdir()
+    secret = "SECRET-DOCUMENT-CONTENT"
+    (project / "chapter.tex").write_text(secret, encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "--no-llm",
+            "run",
+            str(project),
+            "--config",
+            str(CONFIG),
+            "--rubric",
+            str(RUBRIC),
+            "--out",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    output = result.stdout + result.stderr
+    assert result.exit_code == int(ExitCode.CONFIG_ERROR)
+    assert "root main.tex not found" in output
+    assert "--root" in output
+    assert "complete LaTeX project bundle" in output
+    assert str(tmp_path.resolve()) not in output
+    assert secret not in output
+
+
+def test_run_ambiguous_nested_roots_lists_only_relative_candidates(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "private-project"
+    for relative in ("z/main.tex", "a/main.tex"):
+        path = project / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(r"\documentclass{article}", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "--no-llm",
+            "run",
+            str(project),
+            "--config",
+            str(CONFIG),
+            "--rubric",
+            str(RUBRIC),
+            "--out",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    output = result.stdout + result.stderr
+    assert result.exit_code == int(ExitCode.CONFIG_ERROR)
+    assert "multiple LaTeX roots found: a/main.tex, z/main.tex" in output
+    assert str(tmp_path.resolve()) not in output
