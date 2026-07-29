@@ -100,7 +100,7 @@ jobs:
             -Provider ollama -Out build/semantic
       - name: Upload semantic artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: semantic-report-${{ github.sha }}
           path: |
@@ -164,7 +164,7 @@ jobs:
           bash scripts/semantic_ci.sh --provider yandex --out build/semantic "${extra[@]}"
       - name: Upload semantic artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: semantic-report-${{ github.sha }}
           path: |
@@ -191,7 +191,7 @@ jobs:
         run: bash scripts/semantic_ci.sh --provider disabled --out build/semantic
       - name: Upload semantic artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: semantic-report-${{ github.sha }}
           path: |
@@ -267,7 +267,7 @@ jobs:
           echo "Advisory aggregate written; merge is never blocked by this workflow."
       - name: Upload aggregate
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: semantic-aggregate-${{ github.sha }}
           path: build/semantic-publish/
