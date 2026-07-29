@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from normocontrol.rules.algorithm import algorithm_rules
 from normocontrol.rules.annotation import annotation_rules
 from normocontrol.rules.appendix import appendix_rules
 from normocontrol.rules.bibliography import bibliography_rules
@@ -32,6 +33,7 @@ def register_d02_rules(
         *monolith_rules(),
         *annotation_rules(),
         *appendix_rules(),
+        *algorithm_rules(),
     )
     for rule in rules:
         registry.register(rule)
