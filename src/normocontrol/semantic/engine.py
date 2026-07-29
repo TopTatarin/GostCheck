@@ -23,7 +23,7 @@ from normocontrol.semantic.rules.results import RES_01
 from normocontrol.semantic.rules.review import REV_02, REV_04, REV_05, REV_06
 from normocontrol.semantic.rules.structure import STR_05
 from normocontrol.semantic.rules.style import GEN_01, GEN_02
-from normocontrol.semantic.rules.system_analysis import SSA_04
+from normocontrol.semantic.rules.system_analysis import SSA_01, SSA_02, SSA_03, SSA_04
 from normocontrol.semantic.rules.task_detail import TSK_02
 from normocontrol.semantic.schemas import (
     IMPLEMENTED_RULE_IDS,
@@ -61,6 +61,9 @@ RULE_SPECS: dict[str, RuleSpec] = {
         REV_04,
         REV_05,
         REV_06,
+        SSA_01,
+        SSA_02,
+        SSA_03,
         SSA_04,
         STR_05,
         TSK_01,

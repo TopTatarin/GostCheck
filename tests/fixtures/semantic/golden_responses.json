@@ -95,6 +95,53 @@
       "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
     }
   },
+  "SSA-01": {
+    "chunk_id": "структурный-системный-анализ:1",
+    "quote": "Модель as is показана на схеме в нотации BPMN.",
+    "elements": ["as_is_model_description", "notation", "diagram_reference"],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "SSA-02": {
+    "chunk_id": "структурный-системный-анализ:1",
+    "quote": "таблица интеграций содержат систему, адрес и API.",
+    "elements": [
+      "software_applicability",
+      "environment",
+      "integration_system",
+      "integration_address",
+      "integration_protocol_api"
+    ],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
+  "SSA-03": {
+    "chunk_id": "структурный-системный-анализ:2",
+    "quote": "атрибут, вид, формат, частоту",
+    "elements": [
+      "computational_applicability",
+      "data_attribute",
+      "data_kind",
+      "data_format",
+      "data_frequency",
+      "measurement_unit",
+      "data_example"
+    ],
+    "cases": {
+      "complete": {"status": "pass", "state": "present", "confidence": 0.95},
+      "weak": {"status": "warn", "state": "weak", "confidence": 0.55},
+      "absent": {"status": "warn", "state": "absent", "confidence": 0.9},
+      "not_applicable": {"status": "not_applicable", "state": "not_applicable", "confidence": 1.0}
+    }
+  },
   "SSA-04": {
     "chunk_id": "структурный-системный-анализ:1",
     "quote": "Описано только текущее состояние объекта",

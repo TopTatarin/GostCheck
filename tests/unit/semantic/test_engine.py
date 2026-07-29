@@ -338,11 +338,7 @@ def test_missing_required_element_is_rejected_after_one_repair() -> None:
 
 def test_remaining_semantic_rules_are_explicitly_not_implemented() -> None:
     deferred = sorted(SEMANTIC_RULE_IDS - IMPLEMENTED_RULE_IDS)
-    expected = {
-        "SSA-01",
-        "SSA-02",
-        "SSA-03",
-    }
+    expected: set[str] = set()
     report = SemanticEngine(QueueProvider([])).run(make_bundle(), deferred)
 
     assert set(deferred) == expected

@@ -54,7 +54,7 @@ def test_semantic_registry_matches_rubric_and_effective_profiles(
 
 def test_implemented_ids_have_exactly_one_strict_rule_spec() -> None:
     assert set(RULE_SPECS) == IMPLEMENTED_RULE_IDS
-    assert IMPLEMENTED_RULE_IDS < SEMANTIC_RULE_IDS
+    assert IMPLEMENTED_RULE_IDS == SEMANTIC_RULE_IDS
     for rule_id, spec in RULE_SPECS.items():
         assert spec.rule_id == rule_id
         assert spec.section_roles

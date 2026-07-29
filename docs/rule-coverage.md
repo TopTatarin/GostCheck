@@ -48,9 +48,9 @@ records a written decision.
 | REV-05 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | REV-06 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | REV-07 | script | formal | formal suite | implemented | Registered deterministic check. |
-| SSA-01 | script+llm | — | — | not_implemented | Formal and semantic portions are pending. |
-| SSA-02 | llm | — | — | not_implemented | Semantic applicability and element contract are pending. |
-| SSA-03 | llm | — | — | not_implemented | Semantic applicability and element contract are pending. |
+| SSA-01 | script+llm | semantic | semantic suite | implemented | Semantic model/notation contract implemented; formal figure check is pending. |
+| SSA-02 | llm | semantic | semantic suite | implemented | Conditional software applicability and integration contract. |
+| SSA-03 | llm | semantic | semantic suite | implemented | Conditional computational applicability and data-table contract. |
 | SSA-04 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | TSK-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | TSK-02 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal heuristic is pending. |
@@ -77,5 +77,6 @@ records a written decision.
 No written reviewer decisions are present for `ALG-02` or `IMP-02`; therefore they
 remain `pending_decision`, not `manual_required` or `excluded_scope`. `ANN-03`,
 `APP-01`, and `DEP-01` remain implementation work. The incomplete formal portions
-of `ALG-01`, `ALG-03`, `ARC-01`, `RES-01`, and `TSK-02` are also recorded above
-and are not silently treated as covered by their semantic implementations.
+of `ALG-01`, `ALG-03`, `ARC-01`, `RES-01`, `SSA-01`, and `TSK-02` are also
+recorded above and are not silently treated as covered by their semantic
+implementations.
