@@ -3,6 +3,10 @@ name: Reusable thesis validation
 on:
   workflow_call:
     inputs:
+      gostcheck_sha:
+        description: Exact 40-character lowercase GostCheck commit SHA
+        required: true
+        type: string
       submission_path:
         description: Relative path to a LaTeX project, .tex file, or PDF in the caller repository
         required: true
@@ -43,11 +47,20 @@ jobs:
         with:
           path: consumer
           persist-credentials: false
+      - name: Validate GostCheck SHA
+        env:
+          GOSTCHECK_SHA: ${{ inputs.gostcheck_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$GOSTCHECK_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::gostcheck_sha must be a full 40-character lowercase commit SHA"
+            exit 3
+          fi
       - name: Checkout pinned GostCheck implementation
         uses: actions/checkout@v7
         with:
-          repository: ${{ job.workflow_repository }}
-          ref: ${{ job.workflow_sha }}
+          repository: TopTatarin/GostCheck
+          ref: ${{ inputs.gostcheck_sha }}
           path: .gostcheck
           persist-credentials: false
       - name: Set up Python 3.12
@@ -88,11 +101,20 @@ jobs:
         with:
           path: consumer
           persist-credentials: false
+      - name: Validate GostCheck SHA
+        env:
+          GOSTCHECK_SHA: ${{ inputs.gostcheck_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$GOSTCHECK_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::gostcheck_sha must be a full 40-character lowercase commit SHA"
+            exit 3
+          fi
       - name: Checkout pinned GostCheck implementation
         uses: actions/checkout@v7
         with:
-          repository: ${{ job.workflow_repository }}
-          ref: ${{ job.workflow_sha }}
+          repository: TopTatarin/GostCheck
+          ref: ${{ inputs.gostcheck_sha }}
           path: .gostcheck
           persist-credentials: false
       - name: Setup normocontrol
@@ -183,11 +205,20 @@ jobs:
         with:
           path: consumer
           persist-credentials: false
+      - name: Validate GostCheck SHA
+        env:
+          GOSTCHECK_SHA: ${{ inputs.gostcheck_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$GOSTCHECK_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::gostcheck_sha must be a full 40-character lowercase commit SHA"
+            exit 3
+          fi
       - name: Checkout pinned GostCheck implementation
         uses: actions/checkout@v7
         with:
-          repository: ${{ job.workflow_repository }}
-          ref: ${{ job.workflow_sha }}
+          repository: TopTatarin/GostCheck
+          ref: ${{ inputs.gostcheck_sha }}
           path: .gostcheck
           persist-credentials: false
       - name: Setup normocontrol

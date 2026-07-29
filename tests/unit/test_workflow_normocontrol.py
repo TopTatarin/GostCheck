@@ -99,6 +99,12 @@ def test_reusable_workflow_call_inputs_are_typed_and_safe() -> None:
     triggers = payload.get("on", payload.get(True))
     assert set(triggers) == {"workflow_call"}
     inputs = triggers["workflow_call"]["inputs"]
+    assert inputs["gostcheck_sha"] == {
+        "description": "Exact 40-character lowercase GostCheck commit SHA",
+        "required": True,
+        "type": "string",
+    }
+    assert "default" not in inputs["gostcheck_sha"]
     assert inputs["submission_path"] == {
         "description": (
             "Relative path to a LaTeX project, .tex file, or PDF in the caller repository"
@@ -132,11 +138,59 @@ def test_reusable_workflow_has_minimal_permissions_and_separate_self_tests() -> 
     ]
     assert len(engine_checkouts) == 3
     assert all(
-        step["with"]["repository"] == "${{ job.workflow_repository }}"
-        and step["with"]["ref"] == "${{ job.workflow_sha }}"
+        step["with"]["repository"] == "TopTatarin/GostCheck"
+        and step["with"]["ref"] == "${{ inputs.gostcheck_sha }}"
         and step["with"]["persist-credentials"] is False
         for step in engine_checkouts
     )
+    workflow_text = REUSABLE_WORKFLOW.read_text(encoding="utf-8")
+    assert "job.workflow_repository" not in workflow_text
+    assert "job.workflow_sha" not in workflow_text
+
+
+@pytest.mark.parametrize(
+    ("candidate", "accepted"),
+    (
+        ("0123456789abcdef0123456789abcdef01234567", True),
+        ("main", False),
+        ("v0.2.0", False),
+        ("0123456789abcdef0123456789abcdef0123456", False),
+        ("0123456789abcdef0123456789abcdef012345678", False),
+        ("0123456789ABCDEF0123456789ABCDEF01234567", False),
+        ("0" * 39 + ";", False),
+        ("0" * 39 + "\n", False),
+        ("$(touch injected)", False),
+    ),
+)
+def test_reusable_gostcheck_sha_contract(candidate: str, accepted: bool) -> None:
+    assert (re.fullmatch(r"[0-9a-f]{40}", candidate) is not None) is accepted
+
+
+def test_reusable_validates_sha_before_every_engine_checkout() -> None:
+    reusable = _load_yaml(REUSABLE_WORKFLOW)
+    for job in reusable["jobs"].values():
+        steps = _job_steps(job)
+        checkout_indexes = [
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") == "Checkout pinned GostCheck implementation"
+        ]
+        if not checkout_indexes:
+            continue
+
+        assert len(checkout_indexes) == 1
+        checkout_index = checkout_indexes[0]
+        validation_indexes = [
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") == "Validate GostCheck SHA"
+        ]
+        assert validation_indexes == [checkout_index - 1]
+        validation = steps[validation_indexes[0]]
+        assert validation["env"]["GOSTCHECK_SHA"] == "${{ inputs.gostcheck_sha }}"
+        script = validation["run"]
+        assert '[[ ! "$GOSTCHECK_SHA" =~ ^[0-9a-f]{40}$ ]]' in script
+        assert "exit 3" in script
 
 
 def test_reusable_formal_gate_uses_requested_submission() -> None:
