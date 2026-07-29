@@ -125,6 +125,16 @@ page metrics are `unverifiable`; mismatches retain the effective rubric severity
 including `severity_final` on final runs. Evidence is the path-free annotation
 section locator.
 
+## Algorithm structure
+
+ALG-01 and ALG-03 use the LaTeX-derived algorithm section only. ALG-01 checks
+for a real `figure` or algorithm-family environment, while ALG-03 checks for a
+numbered prose description of the form `Блок N.`. Comments, literal code
+environments, and matches in other sections do not satisfy either rule. Missing
+sections are `unverifiable`; absent structural markers are non-blocking warnings
+with the original rubric severity. Semantic suitability and completeness remain
+advisory and cannot create a blocking failure.
+
 ## Fingerprints
 
 Each finding can be serialized with a stable SHA-256 fingerprint over its JSON

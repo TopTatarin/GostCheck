@@ -60,9 +60,9 @@ records a written decision.
 | MTH-01 | class+script | formal | formal suite | implemented | Registered deterministic check. |
 | MTH-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | MTH-03 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
-| ALG-01 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal presence check is pending. |
+| ALG-01 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped figure/algorithm presence plus advisory suitability. |
 | ALG-02 | vision | — | — | pending_decision | Vision/manual scope needs a signed reviewer decision. |
-| ALG-03 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal regex is pending. |
+| ALG-03 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped «Блок N.» regex plus advisory completeness. |
 | IMP-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | IMP-02 | vision | — | — | pending_decision | Vision/manual scope needs a signed reviewer decision. |
 | RES-01 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal presence check is pending. |
@@ -77,6 +77,5 @@ records a written decision.
 No written reviewer decisions are present for `ALG-02` or `IMP-02`; therefore they
 remain `pending_decision`, not `manual_required` or `excluded_scope`. `DEP-01`
 requires written approval of the oral norm before implementation. The incomplete
-formal portions of `ALG-01`, `ALG-03`, `ARC-01`, `RES-01`, `SSA-01`, and
-`TSK-02` are also recorded above and are not silently treated as covered by
-their semantic implementations.
+formal portions of `ARC-01`, `RES-01`, `SSA-01`, and `TSK-02` are also recorded
+above and are not silently treated as covered by their semantic implementations.

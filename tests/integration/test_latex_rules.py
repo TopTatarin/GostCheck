@@ -224,6 +224,39 @@ def test_ann03_compares_latex_counters_with_extracted_pdf_pages(tmp_path: Path) 
     assert finding.evidence
 
 
+def test_algorithm_formal_rules_are_scoped_to_algorithm_section(tmp_path: Path) -> None:
+    main_tex = tmp_path / "main.tex"
+    main_tex.write_text(
+        (
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\section{Описание алгоритма}\n"
+            "\\begin{figure}\\caption{Блок-схема}\\end{figure}\n"
+            "Блок 1. Загрузить документ.\n"
+            "\\end{document}\n"
+        ),
+        encoding="utf-8",
+    )
+    config = load_config(CONFIG_PATH)
+    effective = _effective_rubric()
+    rubric = effective.model_copy(
+        update={"rules": tuple(rule for rule in effective.rules if rule.id in {"ALG-01", "ALG-03"})}
+    )
+    context = ExecutionContext(
+        rubric=rubric,
+        config=config,
+        bundle=LatexExtractor(tmp_path).extract(main_tex),
+        latex=LatexProject(root=tmp_path, main_tex=main_tex),
+        pdf_path=None,
+        bib_paths=(),
+    )
+
+    findings = FormalEngine(default_formal_registry()).run(context).findings
+
+    assert [finding.rule_id for finding in findings] == ["ALG-01", "ALG-03"]
+    assert all(finding.status is FindingStatus.PASS for finding in findings)
+
+
 def test_sys03_unverifiable_when_latexmk_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("shutil.which", lambda _name: None)
     _, findings = _run_fixture("pass", build_service=LatexBuildService())
