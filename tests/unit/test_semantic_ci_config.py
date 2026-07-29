@@ -242,6 +242,79 @@ def test_report_uploads_have_bounded_retention_and_exclude_sources() -> None:
         assert not path.endswith((".pdf", ".tex"))
 
 
+def test_provider_artifacts_upload_only_safe_semantic_outputs() -> None:
+    payload = _load_workflow()
+    expected_paths = {
+        "build/semantic/report.json",
+        "build/semantic/report.md",
+        "build/semantic/status.json",
+        "build/semantic/summary.json",
+    }
+
+    for job_name in ("semantic-ollama", "semantic-yandex", "semantic-disabled"):
+        upload = next(
+            step
+            for step in payload["jobs"][job_name]["steps"]
+            if str(step.get("uses", "")).startswith("actions/upload-artifact@")
+        )
+        paths = {path.strip() for path in upload["with"]["path"].splitlines() if path.strip()}
+
+        assert paths == expected_paths
+        assert all("/cache/" not in path and "/stages/" not in path for path in paths)
+
+
+def test_semantic_artifact_paths_exclude_sensitive_runtime_files(tmp_path: Path) -> None:
+    output = tmp_path / "build" / "semantic"
+    safe_files = {
+        output / "report.json",
+        output / "report.md",
+        output / "status.json",
+        output / "summary.json",
+    }
+    sensitive_files = {
+        output / ".env",
+        output / "model.gguf",
+        output / "submission.tex",
+        output / "cache" / "deterministic" / "submission.json",
+        output / "cache" / "llm" / "response.json",
+        output / "stages" / "semantic.json",
+    }
+    for path in safe_files | sensitive_files:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic", encoding="utf-8")
+
+    payload = _load_workflow()
+    upload = next(
+        step
+        for step in payload["jobs"]["semantic-ollama"]["steps"]
+        if str(step.get("uses", "")).startswith("actions/upload-artifact@")
+    )
+
+    def resolve_upload_paths() -> set[Path]:
+        selected: set[Path] = set()
+        for configured_path in upload["with"]["path"].splitlines():
+            configured_path = configured_path.strip()
+            if not configured_path:
+                continue
+            relative = Path(configured_path).relative_to("build/semantic")
+            candidate = output / relative
+            if candidate.is_dir():
+                selected.update(path for path in candidate.rglob("*") if path.is_file())
+            elif candidate.is_file():
+                selected.add(candidate)
+        return selected
+
+    selected = resolve_upload_paths()
+
+    assert selected == safe_files
+    assert selected.isdisjoint(sensitive_files)
+
+    for path in safe_files - {output / "status.json"}:
+        path.unlink()
+    assert resolve_upload_paths() == {output / "status.json"}
+    assert upload["with"]["if-no-files-found"] == "warn"
+
+
 def test_yandex_job_uses_cloud_environment_and_secret() -> None:
     payload = _load_workflow()
     job = payload["jobs"]["semantic-yandex"]
