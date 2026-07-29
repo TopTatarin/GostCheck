@@ -80,9 +80,9 @@ def test_str05_complete_partial_and_missing_element_outcomes(
             element["evidence"] = []
         payload["evidence"] = []
 
-    finding = SemanticEngine(QueueProvider([payload])).run(
-        _heading_bundle(), (RULE_ID,)
-    ).findings[0]
+    finding = (
+        SemanticEngine(QueueProvider([payload])).run(_heading_bundle(), (RULE_ID,)).findings[0]
+    )
 
     assert finding.status.value == status
     assert finding.diagnostic is None
@@ -103,9 +103,11 @@ def test_str05_missing_subsection_is_diagnostic_without_provider_call() -> None:
 
 
 def test_str05_exact_heading_quote_is_verified() -> None:
-    finding = SemanticEngine(QueueProvider([_valid_payload()])).run(
-        _heading_bundle(), (RULE_ID,)
-    ).findings[0]
+    finding = (
+        SemanticEngine(QueueProvider([_valid_payload()]))
+        .run(_heading_bundle(), (RULE_ID,))
+        .findings[0]
+    )
 
     assert finding.status is SemanticStatus.PASS
     assert finding.evidence
@@ -123,9 +125,7 @@ def test_str05_fabricated_quote_and_wrong_chunk_are_removed(mode: str) -> None:
         chunk_id=chunk_id,
     )
 
-    report = SemanticEngine(QueueProvider([payload, payload])).run(
-        _heading_bundle(), (RULE_ID,)
-    )
+    report = SemanticEngine(QueueProvider([payload, payload])).run(_heading_bundle(), (RULE_ID,))
     finding = report.findings[0]
 
     assert finding.status is SemanticStatus.UNVERIFIABLE
@@ -177,18 +177,14 @@ def test_str05_provider_failures_remain_advisory(
     error: Exception,
     diagnostic: DiagnosticCode,
 ) -> None:
-    finding = SemanticEngine(QueueProvider([error])).run(
-        _heading_bundle(), (RULE_ID,)
-    ).findings[0]
+    finding = SemanticEngine(QueueProvider([error])).run(_heading_bundle(), (RULE_ID,)).findings[0]
 
     assert finding.status is SemanticStatus.UNVERIFIABLE
     assert finding.diagnostic is diagnostic
 
 
 def test_str05_disabled_provider_is_offline_advisory() -> None:
-    finding = SemanticEngine(DisabledProvider()).run(
-        _heading_bundle(), (RULE_ID,)
-    ).findings[0]
+    finding = SemanticEngine(DisabledProvider()).run(_heading_bundle(), (RULE_ID,)).findings[0]
 
     assert finding.status is SemanticStatus.UNVERIFIABLE
     assert finding.diagnostic is DiagnosticCode.PROVIDER_DISABLED

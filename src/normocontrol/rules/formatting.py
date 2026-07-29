@@ -239,22 +239,17 @@ class Fmt01BodyFontRule:
                 pages = example_pages(spans)
                 pdf_page = pages[0] if pages else spans[0].page
                 bbox = page_text_bbox(spans, pdf_page)
-                fonts = ", ".join(
-                    f"{name[:40]}:{count}" for name, count in top_fonts(spans)
-                )
+                fonts = ", ".join(f"{name[:40]}:{count}" for name, count in top_fonts(spans))
                 page_examples = ",".join(str(page) for page in pages)
                 total_with_invalid = selection.significant_chars + invalid_chars
                 max_tnr_ratio = (
-                    (tnr_ratio * selection.significant_chars + invalid_chars)
-                    / total_with_invalid
-                )
+                    tnr_ratio * selection.significant_chars + invalid_chars
+                ) / total_with_invalid
                 max_size_ratio = (
-                    (size_ratio * selection.significant_chars + invalid_chars)
-                    / total_with_invalid
-                )
+                    size_ratio * selection.significant_chars + invalid_chars
+                ) / total_with_invalid
                 proven_failure = (
-                    max_tnr_ratio < _BODY_FONT_RATIO_MIN
-                    or max_size_ratio < _BODY_FONT_RATIO_MIN
+                    max_tnr_ratio < _BODY_FONT_RATIO_MIN or max_size_ratio < _BODY_FONT_RATIO_MIN
                 )
                 if proven_failure:
                     pdf_ok = False
@@ -264,8 +259,7 @@ class Fmt01BodyFontRule:
                     )
                 else:
                     pdf_ok = (
-                        tnr_ratio >= _BODY_FONT_RATIO_MIN
-                        and size_ratio >= _BODY_FONT_RATIO_MIN
+                        tnr_ratio >= _BODY_FONT_RATIO_MIN and size_ratio >= _BODY_FONT_RATIO_MIN
                     )
                 description = (
                     f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
@@ -285,9 +279,7 @@ class Fmt01BodyFontRule:
                 diagnostic_span = _first_span_on_page(pdf_bundle.spans, None)
                 pdf_page = diagnostic_span.page if diagnostic_span is not None else None
                 diagnostic_bbox = diagnostic_span.bbox if diagnostic_span is not None else None
-                pdf_missing_message = (
-                    "надёжные body-spans не найдены; проверка FMT-01 неполна"
-                )
+                pdf_missing_message = "надёжные body-spans не найдены; проверка FMT-01 неполна"
                 description = (
                     f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; "
                     f"page={pdf_page or 'unknown'}; "
@@ -535,9 +527,7 @@ class Fmt05MarginsRule:
                     if diagnostic_span is not None
                     else pdf_bundle.pages[0].number
                 )
-                diagnostic_bbox = (
-                    diagnostic_span.bbox if diagnostic_span is not None else None
-                )
+                diagnostic_bbox = diagnostic_span.bbox if diagnostic_span is not None else None
                 pdf_missing_message = (
                     "обнаружены spans с ненадёжным bbox; соблюдение полей нельзя подтвердить"
                 )
@@ -573,13 +563,16 @@ class Fmt05MarginsRule:
                     else page
                 )
                 left, right, top, bottom = margin_bounds(metric_page)
-                excluded = ",".join(
-                    f"{kind}:{count}"
-                    for kind, count in (
-                        *measurement.excluded_counts,
-                        *layout_measurement.excluded_counts,
+                excluded = (
+                    ",".join(
+                        f"{kind}:{count}"
+                        for kind, count in (
+                            *measurement.excluded_counts,
+                            *layout_measurement.excluded_counts,
+                        )
                     )
-                ) or "none"
+                    or "none"
+                )
                 description = (
                     f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
                     f"bbox=[{_bbox_value(content_bbox)}]; "
@@ -603,13 +596,16 @@ class Fmt05MarginsRule:
                     else pdf_bundle.pages[0].number
                 )
                 empty_bbox = diagnostic_span.bbox if diagnostic_span is not None else None
-                excluded = ",".join(
-                    f"{kind}:{count}"
-                    for kind, count in (
-                        *measurement.excluded_counts,
-                        *layout_measurement.excluded_counts,
+                excluded = (
+                    ",".join(
+                        f"{kind}:{count}"
+                        for kind, count in (
+                            *measurement.excluded_counts,
+                            *layout_measurement.excluded_counts,
+                        )
                     )
-                ) or "none"
+                    or "none"
+                )
                 pdf_missing_message = (
                     "надёжный body region не найден; соблюдение полей нельзя подтвердить"
                 )

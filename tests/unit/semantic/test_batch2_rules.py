@@ -135,9 +135,11 @@ def test_batch2_one_missing_cross_section_is_diagnostic(rule_id: str) -> None:
 
 @pytest.mark.parametrize("rule_id", BATCH2_RULE_IDS)
 def test_batch2_exact_quote_is_verified(rule_id: str) -> None:
-    finding = SemanticEngine(QueueProvider([_valid_payload(rule_id)])).run(
-        make_bundle(), (rule_id,)
-    ).findings[0]
+    finding = (
+        SemanticEngine(QueueProvider([_valid_payload(rule_id)]))
+        .run(make_bundle(), (rule_id,))
+        .findings[0]
+    )
 
     assert finding.status is SemanticStatus.PASS
     assert finding.evidence

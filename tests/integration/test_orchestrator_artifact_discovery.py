@@ -98,6 +98,38 @@ def _formal_findings(report: RunReport) -> tuple[Finding, ...]:
     return formal.findings
 
 
+def test_includegraphics_does_not_shadow_input_during_artifact_discovery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "main.tex").write_text(
+        "\\documentclass{article}\n"
+        "\\begin{document}\n"
+        "\\includegraphics[width=\\textwidth]{figures/a.png}\n"
+        "\\input{chapter}\n"
+        "\\end{document}\n",
+        encoding="utf-8",
+    )
+    (project / "chapter.tex").write_text("Included chapter.", encoding="utf-8")
+    captured = _capture_contexts(monkeypatch)
+
+    report = run_pipeline(
+        _request(tmp_path, project),
+        OrchestratorHooks(build_service=_SuccessBuild()),
+    )
+
+    assert report.exit_code == 0
+    assert len(captured) == 1
+    assert captured[0].bundle is not None
+    assert [source.path for source in captured[0].bundle.source_files] == [
+        "main.tex",
+        "chapter.tex",
+    ]
+    assert "Included chapter." in captured[0].bundle.text
+
+
 @pytest.mark.parametrize(
     ("commands", "names"),
     [

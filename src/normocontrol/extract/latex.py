@@ -31,7 +31,8 @@ from normocontrol.extract.chunking import Chunker
 from normocontrol.extract.sections import SectionDetector
 
 _INCLUDE_RE = re.compile(
-    r"\\(?P<command>input|include)\s*(?:\{(?P<braced>[^{}]+)\}|(?P<bare>[^\s{}%]+))"
+    r"\\(?P<command>input|include)(?![^\W\d_]|@)\s*"
+    r"(?:\{(?P<braced>[^{}]+)\}|(?P<bare>[^\s{}%]+))"
 )
 _BIBLIOGRAPHY_RE = re.compile(
     r"\\(?P<command>addbibresource|bibliography)\s*"

@@ -179,10 +179,7 @@ def test_character_weighted_ratios_do_not_depend_on_span_splitting() -> None:
         _span(text="ij", font="Helvetica", font_size=12.0),
     )
     split = (
-        *(
-            _span(text=char, font="Times-Roman", font_size=14.0)
-            for char in "abcdefgh"
-        ),
+        *(_span(text=char, font="Times-Roman", font_size=14.0) for char in "abcdefgh"),
         *(_span(text=char, font="Helvetica", font_size=12.0) for char in "ij"),
     )
 
@@ -477,10 +474,14 @@ def test_fmt_evidence_contains_location_and_numeric_metrics() -> None:
         pages=(page,),
     )
 
-    finding = Fmt05MarginsRule().run(
-        _pdf_context("FMT-05", bundle),
-        effective_rule("FMT-05", layer="class"),
-    ).findings[0]
+    finding = (
+        Fmt05MarginsRule()
+        .run(
+            _pdf_context("FMT-05", bundle),
+            effective_rule("FMT-05", layer="class"),
+        )
+        .findings[0]
+    )
 
     assert finding.rule_id == "FMT-05"
     assert finding.path == "doc.pdf"

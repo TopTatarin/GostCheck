@@ -101,9 +101,7 @@ def test_reusable_workflow_has_minimal_permissions_and_separate_self_tests() -> 
     publish = reusable["jobs"]["publish-report"]
     assert publish["permissions"] == {"pull-requests": "write"}
     assert _load_yaml(WORKFLOW)["name"] == "Normocontrol"
-    assert "workflow_call" not in (
-        _load_yaml(WORKFLOW).get("on", _load_yaml(WORKFLOW).get(True))
-    )
+    assert "workflow_call" not in (_load_yaml(WORKFLOW).get("on", _load_yaml(WORKFLOW).get(True)))
     engine_checkouts = [
         step
         for job in reusable["jobs"].values()
@@ -135,7 +133,7 @@ def test_reusable_formal_gate_uses_requested_submission() -> None:
     run = _step_by_name(formal, "Run formal gate on requested submission")
     script = run["run"]
     assert 'run "$GITHUB_WORKSPACE/consumer/$SUBMISSION_RELATIVE"' in script
-    assert "--profile \"$PROFILE\"" in script
+    assert '--profile "$PROFILE"' in script
     assert "--no-llm" in script
     assert "--only formal" in script
     assert "--only aggregate" in script
@@ -144,7 +142,7 @@ def test_reusable_formal_gate_uses_requested_submission() -> None:
     assert "tests/fixtures/demo/fail" not in script
 
     semantic_script = _step_by_name(semantic, "Run non-blocking semantic checks")["run"]
-    assert "--provider \"$PROVIDER\"" in semantic_script
+    assert '--provider "$PROVIDER"' in semantic_script
     assert "--only semantic" in semantic_script
 
 
@@ -216,9 +214,7 @@ def test_setup_installs_and_verifies_minimal_tex_toolchain() -> None:
     assert payload["inputs"]["install-tex"]["default"] == "false"
     assert payload["inputs"]["project-root"]["default"] == "."
     dependencies = next(
-        step
-        for step in payload["runs"]["steps"]
-        if step["name"] == "Install locked dependencies"
+        step for step in payload["runs"]["steps"] if step["name"] == "Install locked dependencies"
     )
     assert dependencies["env"]["PROJECT_ROOT"] == "${{ inputs.project-root }}"
     assert "${{ inputs.project-root }}" not in dependencies["run"]

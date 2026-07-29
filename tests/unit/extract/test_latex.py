@@ -43,6 +43,70 @@ def test_multifile_latex_is_expanded_in_source_order_and_sectioned() -> None:
     assert {chunk.section_id for chunk in first.chunks} >= {"introduction", "conclusion"}
 
 
+def test_includegraphics_is_not_treated_as_include_dependency(tmp_path: Path) -> None:
+    write_tex(tmp_path / "chapter.tex", "Included chapter.")
+    main = write_tex(
+        tmp_path / "main.tex",
+        "\\includegraphics[width=\\textwidth]{figures/a.png}\n\\input{chapter}\n",
+    )
+
+    bundle = LatexExtractor(tmp_path).extract(main)
+
+    assert [source.path for source in bundle.source_files] == ["main.tex", "chapter.tex"]
+    assert "Included chapter." in bundle.text
+
+
+@pytest.mark.parametrize(
+    "directive",
+    [
+        r"\input{chapter}",
+        r"\include{chapter}",
+        r"\input chapter",
+        r"\include chapter",
+        "\\input \n {chapter}",
+        "\\include\t\n chapter",
+    ],
+)
+def test_input_and_include_argument_forms_are_recognized(
+    tmp_path: Path,
+    directive: str,
+) -> None:
+    write_tex(tmp_path / "chapter.tex", "Included chapter.")
+    main = write_tex(tmp_path / "main.tex", directive)
+
+    bundle = LatexExtractor(tmp_path).extract(main)
+
+    assert [source.path for source in bundle.source_files] == ["main.tex", "chapter.tex"]
+    assert "Included chapter." in bundle.text
+
+
+@pytest.mark.parametrize(
+    "directive",
+    [
+        r"\includegraphics[width=\textwidth]{figures/a.png}",
+        r"\includegraphics*{a}",
+        r"\includeonly{a}",
+        r"\inputencoding{utf8}",
+        r"\inputlineno",
+        r"\includeCustom{a}",
+        r"\inputCustom{a}",
+        r"\includeпользовательская{a}",
+        r"\inputпользовательская{a}",
+        r"\include@internal{a}",
+        r"\input@internal{a}",
+    ],
+)
+def test_commands_with_input_or_include_prefix_are_not_dependencies(
+    tmp_path: Path,
+    directive: str,
+) -> None:
+    main = write_tex(tmp_path / "main.tex", directive)
+
+    bundle = LatexExtractor(tmp_path).extract(main)
+
+    assert [source.path for source in bundle.source_files] == ["main.tex"]
+
+
 def test_comments_escaped_percent_and_literal_environments_are_safe(tmp_path: Path) -> None:
     write_tex(tmp_path / "secret.tex", "НЕ ДОЛЖЕН ПОПАСТЬ")
     main = write_tex(
@@ -56,6 +120,9 @@ literal % \input{secret}
 \begin{lstlisting}
 % \include{secret}
 \end{lstlisting}
+\begin{minted}{python}
+# \input{secret}
+\end{minted}
 """,
     )
 
@@ -65,6 +132,7 @@ literal % \input{secret}
     assert "До % после." in bundle.text
     assert "literal % \\input{secret}" in bundle.text
     assert "% \\include{secret}" in bundle.text
+    assert "# \\input{secret}" in bundle.text
     assert [source.path for source in bundle.source_files] == ["main.tex"]
 
 
@@ -85,6 +153,16 @@ def test_path_traversal_is_rejected(tmp_path: Path) -> None:
     root.mkdir()
     write_tex(tmp_path / "outside.tex", "outside")
     main = write_tex(root / "main.tex", r"\input{../outside}")
+
+    with pytest.raises(UnsafePathError, match="outside project root"):
+        LatexExtractor(root).extract(main)
+
+
+def test_absolute_include_path_is_rejected(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    outside = write_tex(tmp_path / "outside.tex", "outside")
+    main = write_tex(root / "main.tex", f"\\input{{{outside.as_posix()}}}")
 
     with pytest.raises(UnsafePathError, match="outside project root"):
         LatexExtractor(root).extract(main)
@@ -130,3 +208,16 @@ def test_nfd_filename_and_cyrillic_label_are_preserved(tmp_path: Path) -> None:
 
     assert bundle.source_files[1].path == nfd_name
     assert any(section.kind is SectionKind.ANNOTATION for section in bundle.sections)
+
+
+def test_nested_cyrillic_path_with_nfd_filename_is_resolved(tmp_path: Path) -> None:
+    directory_name = "\u0440\u0430\u0437\u0434\u0435\u043b\u044b"
+    nfd_name = unicodedata.normalize("NFD", "\u0433\u043b\u0430\u0432\u0430") + ".tex"
+    relative = (Path(directory_name) / nfd_name).as_posix()
+    write_tex(tmp_path / directory_name / nfd_name, "Nested chapter.")
+    main = write_tex(tmp_path / "main.tex", f"\\input{{{relative}}}")
+
+    bundle = LatexExtractor(tmp_path).extract(main)
+
+    assert [source.path for source in bundle.source_files] == ["main.tex", relative]
+    assert "Nested chapter." in bundle.text
