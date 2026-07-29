@@ -60,8 +60,7 @@ SECTION_PARTS = (
     ("Основной раздел", "Результат предыдущего раздела используется следующим разделом."),
 )
 SECTION_LEVELS = tuple(
-    2 if title == "Сравнение методов локальной проверки" else 1
-    for title, _ in SECTION_PARTS
+    2 if title == "Сравнение методов локальной проверки" else 1 for title, _ in SECTION_PARTS
 )
 
 

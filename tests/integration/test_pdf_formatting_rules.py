@@ -59,9 +59,7 @@ def _tempora_multipage_pdf(path: Path) -> Path:
     font_xrefs: set[int] = set()
     for page_number in range(1, 4):
         page = document.new_page(width=595, height=842)
-        font_xrefs.add(
-            page.insert_font(fontname="SyntheticBody", fontbuffer=font_buffer)
-        )
+        font_xrefs.add(page.insert_font(fontname="SyntheticBody", fontbuffer=font_buffer))
         page.insert_text(
             (100, 80),
             f"Synthetic heading {page_number}",

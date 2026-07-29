@@ -127,8 +127,7 @@ def compute_metrics(
             RuleMetric(
                 rule_id=rule_id,
                 expected=sum(
-                    expected in {"fail", "warn", "detect"}
-                    for _, _, expected, _ in selected
+                    expected in {"fail", "warn", "detect"} for _, _, expected, _ in selected
                 ),
                 actual=sum(is_triggered(statuses) for _, _, _, statuses in selected),
                 counts=_compute_counts(selected),

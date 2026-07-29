@@ -72,8 +72,7 @@ def _degraded_reason(report: RunReport, degraded: bool) -> str:
         {
             finding.rule_id
             for finding in collect_findings(report)
-            if is_formal_layer(finding.layer)
-            and finding.status is FindingStatus.UNVERIFIABLE
+            if is_formal_layer(finding.layer) and finding.status is FindingStatus.UNVERIFIABLE
         }
     )
     if rule_ids:

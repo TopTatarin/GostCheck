@@ -220,9 +220,7 @@ def test_pdf_only_subprocess_returns_real_zero_and_two_codes(tmp_path: Path) -> 
 
     assert passed.returncode == int(ExitCode.SUCCESS), passed.stdout + passed.stderr
     assert failed.returncode == int(ExitCode.FORMAL_FAILURE), failed.stdout + failed.stderr
-    published = json.loads(
-        (tmp_path / "wrong-font" / "report.json").read_text(encoding="utf-8")
-    )
+    published = json.loads((tmp_path / "wrong-font" / "report.json").read_text(encoding="utf-8"))
     finding = next(item for item in published["findings"] if item["rule_id"] == "FMT-01")
     assert finding["path"] == "fmt_wrong_font.pdf"
     assert finding["page"] == 1
@@ -252,12 +250,8 @@ def test_pdf_fail_fixtures_return_two_in_subprocess(
 
     assert result.returncode == int(ExitCode.FORMAL_FAILURE), result.stdout + result.stderr
     if rule_id == "FMT-05":
-        published = json.loads(
-            (tmp_path / rule_id / "report.json").read_text(encoding="utf-8")
-        )
-        finding = next(
-            item for item in published["findings"] if item["rule_id"] == "FMT-05"
-        )
+        published = json.loads((tmp_path / rule_id / "report.json").read_text(encoding="utf-8"))
+        finding = next(item for item in published["findings"] if item["rule_id"] == "FMT-05")
         assert finding["path"] == filename
         assert finding["page"] == 1
         assert finding["evidence"]
@@ -292,9 +286,7 @@ def test_run_supports_cyrillic_paths_with_spaces_and_existing_report_dir(
     source_dir = tmp_path / "Синтетическая работа с пробелами"
     source_dir.mkdir()
     source = source_dir / "Проверка шрифта.pdf"
-    source.write_bytes(
-        (ROOT / "tests" / "fixtures" / "pdf" / "fmt_pass.pdf").read_bytes()
-    )
+    source.write_bytes((ROOT / "tests" / "fixtures" / "pdf" / "fmt_pass.pdf").read_bytes())
     out = tmp_path / "Каталог отчёта"
 
     first = runner.invoke(

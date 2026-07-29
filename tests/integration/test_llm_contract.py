@@ -167,10 +167,8 @@ def test_pipeline_uses_yaml_model_and_endpoint_without_source_changes(
     config_text = (root / "normocontrol.yaml.example").read_text(encoding="utf-8")
     config_path.write_text(
         config_text.replace(
-            "provider: disabled\n  model: qwen3:8b-q4_K_M\n"
-            "  base_url: http://127.0.0.1:11434/v1",
-            "provider: ollama\n  model: yaml-contract-model\n"
-            "  base_url: http://127.0.0.9:11434/v1",
+            "provider: disabled\n  model: qwen3:8b-q4_K_M\n  base_url: http://127.0.0.1:11434/v1",
+            "provider: ollama\n  model: yaml-contract-model\n  base_url: http://127.0.0.9:11434/v1",
         ),
         encoding="utf-8",
     )

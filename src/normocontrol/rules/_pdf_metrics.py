@@ -144,9 +144,7 @@ def span_is_bold(span: TextSpan) -> bool:
 def significant_character_count(text: str) -> int:
     """Count visible, non-whitespace characters used as metric weights."""
     return sum(
-        1
-        for char in text
-        if not char.isspace() and not unicodedata.category(char).startswith("C")
+        1 for char in text if not char.isspace() and not unicodedata.category(char).startswith("C")
     )
 
 
@@ -164,9 +162,7 @@ def body_spans(spans: tuple[TextSpan, ...]) -> tuple[TextSpan, ...]:
     return tuple(
         span
         for span in spans
-        if span.font_size
-        and span.font_size > 0
-        and significant_character_count(span.text) >= 2
+        if span.font_size and span.font_size > 0 and significant_character_count(span.text) >= 2
     )
 
 
@@ -420,9 +416,7 @@ def example_pages(
 def page_text_bbox(spans: Iterable[TextSpan], page_number: int) -> BoundingBox | None:
     """Union bbox of all reliable spans on one page."""
     page_spans = [
-        span
-        for span in spans
-        if span.page == page_number and bbox_is_reliable(span.bbox)
+        span for span in spans if span.page == page_number and bbox_is_reliable(span.bbox)
     ]
     if not page_spans:
         return None
@@ -540,11 +534,7 @@ def extract_pdf_layout_objects(pdf_path: Path | None) -> tuple[PdfLayoutObject, 
                 drawings = cast(list[dict[str, Any]], page.get_drawings())
                 for drawing in drawings:
                     bbox = _layout_bbox(drawing.get("rect"))
-                    if (
-                        bbox is None
-                        or bbox.x1 - bbox.x0 <= 2.0
-                        or bbox.y1 - bbox.y0 <= 2.0
-                    ):
+                    if bbox is None or bbox.x1 - bbox.x0 <= 2.0 or bbox.y1 - bbox.y0 <= 2.0:
                         continue
                     signature = (
                         f"{bbox.x1 - bbox.x0:.1f}x{bbox.y1 - bbox.y0:.1f}:"
@@ -582,9 +572,7 @@ def check_layout_object_margins(
             repetitions[(zone, item.kind, item.signature)].append(item)
     for candidates in repetitions.values():
         if len({item.page for item in candidates}) >= required_pages:
-            relative_y = [
-                item.bbox.y0 / page_by_number[item.page].height for item in candidates
-            ]
+            relative_y = [item.bbox.y0 / page_by_number[item.page].height for item in candidates]
             if max(relative_y) - min(relative_y) <= 0.025:
                 marginal.update(candidates)
 
@@ -629,9 +617,7 @@ def median_line_spacing_ratio(spans: tuple[TextSpan, ...]) -> float | None:
         if body_size <= 0:
             continue
         baselines = [y for y, _ in ordered]
-        deltas = [
-            baselines[index + 1] - baselines[index] for index in range(len(baselines) - 1)
-        ]
+        deltas = [baselines[index + 1] - baselines[index] for index in range(len(baselines) - 1)]
         positive = [delta for delta in deltas if delta > 0]
         if not positive:
             continue
