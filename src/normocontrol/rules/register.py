@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from normocontrol.rules.appendix import appendix_rules
 from normocontrol.rules.bibliography import bibliography_rules
 from normocontrol.rules.captions import caption_rules
 from normocontrol.rules.figures import figures_rules
@@ -28,6 +29,7 @@ def register_d02_rules(
         *system_rules(build_service=build_service, chktex=chktex),
         *structure_rules(),
         *monolith_rules(),
+        *appendix_rules(),
     )
     for rule in rules:
         registry.register(rule)

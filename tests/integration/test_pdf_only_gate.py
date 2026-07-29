@@ -59,6 +59,21 @@ def _empty_pdf(path: Path) -> Path:
     return path
 
 
+def _appendix_pdf(path: Path) -> Path:
+    document = fitz.open()
+    page = document.new_page(width=595, height=842)
+    page.insert_text((72, 96), "Appendix A", fontsize=16)
+    page.insert_text(
+        (72, 132),
+        "Repository: https://github.com/example/synthetic-project",
+        fontsize=12,
+    )
+    document.set_toc([[1, "Appendix A", 1]])
+    document.save(path)
+    document.close()
+    return path
+
+
 def test_fmt_pass_pdf_runs_available_checks_without_latex_requirement() -> None:
     findings = _fmt_findings(PDF_FIXTURES / "fmt_pass.pdf")
 
@@ -70,6 +85,16 @@ def test_fmt_pass_pdf_runs_available_checks_without_latex_requirement() -> None:
     assert all(
         "required source unavailable: latex_project" not in item.message for item in findings
     )
+
+
+def test_app_01_detects_repository_url_in_pdf_appendix(tmp_path: Path) -> None:
+    pdf_path = _appendix_pdf(tmp_path / "appendix.pdf")
+    result = FormalEngine(default_formal_registry()).run(_context(pdf_path))
+    finding = _finding(result.findings, "APP-01")
+
+    assert finding.status is FindingStatus.PASS
+    assert finding.severity is Severity.INFO
+    assert finding.evidence
 
 
 @pytest.mark.parametrize(

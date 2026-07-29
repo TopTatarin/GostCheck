@@ -67,7 +67,7 @@ records a written decision.
 | IMP-02 | vision | — | — | pending_decision | Vision/manual scope needs a signed reviewer decision. |
 | RES-01 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal presence check is pending. |
 | CON-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
-| APP-01 | script | — | — | pending_decision | Implementation required; no signed scope decision exists. |
+| APP-01 | script | formal | formal suite | implemented | Deterministic Git repository URL check limited to appendix sections. |
 | GEN-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | GEN-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | DEP-01 | script | — | — | pending_decision | Implementation requires approved oral-norm scope. |
@@ -75,8 +75,8 @@ records a written decision.
 ## Decisions required
 
 No written reviewer decisions are present for `ALG-02` or `IMP-02`; therefore they
-remain `pending_decision`, not `manual_required` or `excluded_scope`. `ANN-03`,
-`APP-01`, and `DEP-01` remain implementation work. The incomplete formal portions
-of `ALG-01`, `ALG-03`, `ARC-01`, `RES-01`, `SSA-01`, and `TSK-02` are also
-recorded above and are not silently treated as covered by their semantic
-implementations.
+remain `pending_decision`, not `manual_required` or `excluded_scope`. `ANN-03`
+remains implementation work. `DEP-01` requires written approval of the oral norm
+before implementation. The incomplete formal portions of `ALG-01`, `ALG-03`,
+`ARC-01`, `RES-01`, `SSA-01`, and `TSK-02` are also recorded above and are not
+silently treated as covered by their semantic implementations.
