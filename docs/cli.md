@@ -1,5 +1,8 @@
 # CLI: `normocontrol run`
 
+Полный входной контракт для PDF и LaTeX source bundle описан в
+[source-submissions.md](source-submissions.md).
+
 Полный прогон нормоконтроля одной командой:
 
 ```text
@@ -10,6 +13,7 @@ build → formal → semantic → aggregate
 
 ```bash
 normocontrol run PATH \
+  [--root RELATIVE_ROOT.tex] \
   --config normocontrol.yaml.example \
   --rubric rubric.yaml \
   --out build/normocontrol \

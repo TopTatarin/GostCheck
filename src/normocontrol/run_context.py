@@ -86,6 +86,7 @@ class RunRequest:
     out_dir: Path
     config_path: Path
     rubric_path: Path
+    root: Path | None = None
     profile: str | None = None
     no_llm: bool = False
     provider: str | None = None

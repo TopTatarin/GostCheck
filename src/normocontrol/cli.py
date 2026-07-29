@@ -44,6 +44,7 @@ from normocontrol.rules.engine import FormalEngine
 from normocontrol.rules.register import default_formal_registry
 from normocontrol.run_context import RunRequest, parse_only
 from normocontrol.semantic.engine import SemanticEngine
+from normocontrol.submission import resolve_submission, validate_latex_bundle
 
 app = typer.Typer(no_args_is_help=True, help="Автоматизированный нормоконтроль ВКР.")
 rubric_app = typer.Typer(no_args_is_help=True, help="Проверка и просмотр рубрики.")
@@ -119,11 +120,20 @@ def collect_doctor_checks(settings: DoctorSettings | None = None) -> tuple[Docto
         llm_available = current_settings.openai_api_key is not None
         llm_detail = "credentials configured" if llm_available else "credentials not configured"
 
+    tex_engines = tuple(
+        name for name in ("xelatex", "lualatex", "pdflatex") if shutil.which(name) is not None
+    )
     return (
         DoctorCheck("Python 3.12", sys.version_info[:2] == (3, 12), sys.version.split()[0]),
         DoctorCheck("Git", shutil.which("git") is not None),
         DoctorCheck("latexmk", shutil.which("latexmk") is not None),
         DoctorCheck("chktex", shutil.which("chktex") is not None),
+        DoctorCheck(
+            "TeX engine",
+            bool(tex_engines),
+            ", ".join(tex_engines) if tex_engines else "xelatex/lualatex/pdflatex not found",
+        ),
+        DoctorCheck("biber", shutil.which("biber") is not None),
         DoctorCheck("Ollama (optional)", ollama_available),
         DoctorCheck("LLM provider", llm_available, llm_detail),
     )
@@ -301,9 +311,36 @@ def main(
 
 
 @app.command()
-def doctor() -> None:
-    """Check local prerequisites; missing optional tools do not change exit code 0."""
+def doctor(
+    source: Annotated[
+        Path | None,
+        typer.Argument(help="Необязательный PDF или каталог LaTeX submission."),
+    ] = None,
+    root: Annotated[
+        Path | None,
+        typer.Option("--root", help="Относительный root .tex внутри каталога submission."),
+    ] = None,
+) -> None:
+    """Check local prerequisites and optionally validate a submission bundle."""
     render_doctor(collect_doctor_checks())
+    if source is None:
+        if root is not None:
+            echo_console("ERROR --root requires a submission path", err=True)
+            raise typer.Exit(code=int(ExitCode.CONFIG_ERROR))
+        return
+    try:
+        submission = resolve_submission(source, root=root)
+        if submission.source.suffix.casefold() == ".tex":
+            validate_latex_bundle(submission.root, submission.source)
+        else:
+            PdfExtractor(submission.root).extract(submission.source)
+    except (ConfigurationError, ExtractionError) as error:
+        echo_console(f"ERROR submission input: {error}", err=True)
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
+    echo_console(
+        f"submission input: OK ({submission.source.suffix.casefold()[1:]}; "
+        f"root={submission.relative_source})"
+    )
 
 
 @llm_app.command("doctor")
@@ -420,6 +457,13 @@ def run_command(
     out: Annotated[Path, typer.Option("--out", help="Каталог артефактов прогона.")] = Path(
         "build/normocontrol"
     ),
+    root: Annotated[
+        Path | None,
+        typer.Option(
+            "--root",
+            help="Относительный путь к root .tex внутри каталога submission.",
+        ),
+    ] = None,
     profile: Annotated[
         str | None,
         typer.Option("--profile", help="software, research или organizational."),
@@ -475,6 +519,7 @@ def run_command(
             out_dir=out,
             config_path=config,
             rubric_path=rubric,
+            root=root,
             profile=profile,
             no_llm=effective_no_llm,
             provider=provider,

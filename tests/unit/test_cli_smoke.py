@@ -50,8 +50,40 @@ def test_doctor_is_offline_and_non_blocking_when_binaries_are_missing(
     assert "Git" in result.stdout
     assert "latexmk" in result.stdout
     assert "chktex" in result.stdout
+    assert "TeX engine" in result.stdout
+    assert "biber" in result.stdout
     assert "LLM provider" in result.stdout
     assert "not found" in result.stdout
+
+
+def test_doctor_validates_submission_dependencies_without_exposing_content(
+    tmp_path: Path,
+) -> None:
+    secret = "SECRET-DOCUMENT-CONTENT"
+    (tmp_path / "main.tex").write_text(
+        f"{secret}\n\\input{{missing}}\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(cli.app, ["doctor", str(tmp_path)])
+    output = result.stdout + result.stderr
+
+    assert result.exit_code == ExitCode.CONFIG_ERROR
+    assert "missing include: missing.tex" in output
+    assert secret not in output
+    assert str(tmp_path.resolve()) not in output
+
+
+def test_doctor_rejects_unreadable_pdf_as_input(tmp_path: Path) -> None:
+    source = tmp_path / "broken.pdf"
+    source.write_bytes(b"not a readable PDF")
+
+    result = runner.invoke(cli.app, ["doctor", str(source)])
+    output = result.stdout + result.stderr
+
+    assert result.exit_code == ExitCode.CONFIG_ERROR
+    assert "unable to open PDF: broken.pdf" in output
+    assert str(tmp_path.resolve()) not in output
 
 
 @pytest.mark.parametrize(

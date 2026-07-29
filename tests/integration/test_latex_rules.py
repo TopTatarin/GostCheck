@@ -17,6 +17,7 @@ from normocontrol.rules.context import ExecutionContext, LatexProject
 from normocontrol.rules.engine import FormalEngine
 from normocontrol.rules.gate import blocks_merge
 from normocontrol.rules.register import default_formal_registry
+from normocontrol.tools.chktex import ChktexResult, ChktexRunner
 from normocontrol.tools.latexmk import LatexBuildResult, LatexBuildService, LatexBuildStatus
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -50,6 +51,16 @@ class _SuccessBuildService(LatexBuildService):
         )
 
 
+class _MissingChktex(ChktexRunner):
+    def lint(self, project_root: Path, main_tex: Path) -> ChktexResult:
+        del project_root, main_tex
+        return ChktexResult(
+            available=False,
+            returncode=127,
+            output="chktex executable not found",
+        )
+
+
 def _effective_rubric(profile: WorkProfile = WorkProfile.SOFTWARE):
     config = load_config(CONFIG_PATH)
     if config.work_profile is not profile:
@@ -62,6 +73,7 @@ def _run_fixture(
     *,
     bundle: DocumentBundle | None = None,
     build_service: LatexBuildService | None = None,
+    chktex: ChktexRunner | None = None,
 ) -> tuple:
     project_root = FIXTURES / fixture_name
     main_tex = project_root / "main.tex"
@@ -75,7 +87,10 @@ def _run_fixture(
         pdf_path=None,
         bib_paths=(),
     )
-    registry = default_formal_registry(build_service=build_service or _SuccessBuildService())
+    registry = default_formal_registry(
+        build_service=build_service or _SuccessBuildService(),
+        chktex=chktex,
+    )
     result = FormalEngine(registry).run(context)
     d02_findings = tuple(finding for finding in result.findings if finding.rule_id in D02_RULES)
     return result, d02_findings
@@ -165,3 +180,12 @@ def test_sys03_unverifiable_when_latexmk_missing(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr("shutil.which", lambda _name: None)
     _, findings = _run_fixture("pass", build_service=LatexBuildService())
     assert FindingStatus.UNVERIFIABLE in _statuses(findings, "SYS-03")
+
+
+def test_sys03_unverifiable_only_for_chktex_when_latex_build_succeeds() -> None:
+    _, findings = _run_fixture("pass", chktex=_MissingChktex())
+    sys03 = tuple(finding for finding in findings if finding.rule_id == "SYS-03")
+
+    assert len(sys03) == 1
+    assert sys03[0].status is FindingStatus.UNVERIFIABLE
+    assert "chktex" in sys03[0].message

@@ -57,6 +57,7 @@ from normocontrol.rules.register import default_formal_registry
 from normocontrol.run_context import RunRequest, RunState, StageName
 from normocontrol.semantic.engine import SemanticEngine
 from normocontrol.semantic.schemas import SemanticFinding, SemanticReport, SemanticStatus
+from normocontrol.submission import resolve_submission
 from normocontrol.tools.latexmk import LatexBuildResult, LatexBuildService, LatexBuildStatus
 
 BuildFn = Callable[[Path, Path], LatexBuildResult]
@@ -104,13 +105,19 @@ class Orchestrator:
             lock = OutputLock(request.out_dir)
             lock.acquire()
             cache = StageCache(request.out_dir / CACHE_DIR_NAME)
-            source = self._resolve_source(request.source)
+            submission = resolve_submission(request.source, root=request.root)
+            source = submission.source
+            project_root = submission.root
             config, rubric = self._load_config_and_rubric(request)
             if request.apply_final_severity:
                 rubric = apply_final_severity(rubric)
 
             try:
-                source_hash = self._source_hash(source, excluded_root=request.out_dir)
+                source_hash = self._source_hash(
+                    source,
+                    project_root=project_root,
+                    excluded_root=request.out_dir,
+                )
             except ExtractionError as error:
                 raise ConfigurationError(str(error)) from error
             rubric_hash = hash_file(request.rubric_path.resolve())
@@ -129,6 +136,7 @@ class Orchestrator:
                 build_stage, artifacts, build_meta = self._stage_build(
                     request=request,
                     source=source,
+                    project_root=project_root,
                     cache=cache,
                     base_key=base_key,
                     state=state,
@@ -143,7 +151,11 @@ class Orchestrator:
                 state.mark_completed(StageName.BUILD)
             else:
                 try:
-                    artifacts = self._extract_only(source, include_compiled_pdf=True)
+                    artifacts = self._extract_only(
+                        source,
+                        project_root=project_root,
+                        include_compiled_pdf=True,
+                    )
                 except ExtractionError as error:
                     raise ConfigurationError(str(error)) from error
 
@@ -289,20 +301,6 @@ class Orchestrator:
     def _handle_sigint(self, _signum: int, _frame: object) -> None:
         self._canceled = True
 
-    def _resolve_source(self, source: Path) -> Path:
-        if not source.exists():
-            raise ConfigurationError(f"source path does not exist: {source}")
-        if source.is_dir():
-            for name in ("main.tex", "main.pdf"):
-                candidate = source / name
-                if candidate.is_file():
-                    return candidate.resolve()
-            raise ConfigurationError(f"directory has no main.tex or main.pdf: {source}")
-        suffix = source.suffix.casefold()
-        if suffix not in {".tex", ".pdf"}:
-            raise ConfigurationError("supported source extensions are .tex and .pdf")
-        return source.resolve()
-
     def _load_config_and_rubric(
         self,
         request: RunRequest,
@@ -322,21 +320,27 @@ class Orchestrator:
             raise ConfigurationError(f"invalid config/rubric: {error}") from error
         return config, rubric
 
-    def _source_hash(self, source: Path, *, excluded_root: Path | None = None) -> str:
+    def _source_hash(
+        self,
+        source: Path,
+        *,
+        project_root: Path,
+        excluded_root: Path | None = None,
+    ) -> str:
         if source.suffix.casefold() == ".tex":
-            root = source.parent
             excluded = () if excluded_root is None else (excluded_root,)
-            files = LatexExtractor(root).project_files(excluded_roots=excluded)
-            return hash_paths(files, root=root)
+            files = LatexExtractor(project_root).project_files(excluded_roots=excluded)
+            return hash_paths(files, root=project_root)
         return hash_file(source)
 
     def _extract_only(
         self,
         source: Path,
         *,
+        project_root: Path,
         include_compiled_pdf: bool,
     ) -> PipelineArtifacts:
-        root = source.parent
+        root = project_root
         suffix = source.suffix.casefold()
         if suffix == ".tex":
             extractor = LatexExtractor(root)
@@ -365,6 +369,7 @@ class Orchestrator:
         *,
         request: RunRequest,
         source: Path,
+        project_root: Path,
         cache: StageCache,
         base_key: dict[str, str],
         state: RunState,
@@ -375,7 +380,7 @@ class Orchestrator:
         if cached is not None:
             bundle = DocumentBundle.model_validate(cached["bundle"])
             if source.suffix.casefold() == ".tex":
-                extractor = LatexExtractor(source.parent)
+                extractor = LatexExtractor(project_root)
                 bib_paths = extractor.discover_bibliography_paths(source)
                 bibliography_declared = extractor.bibliography_declared(source)
                 pdf_payload = cached.get("pdf_bundle")
@@ -388,7 +393,7 @@ class Orchestrator:
                 pdf_path = compiled if pdf_bundle is not None and compiled.is_file() else None
                 artifacts = PipelineArtifacts(
                     bundle=bundle,
-                    latex=LatexProject(root=source.parent, main_tex=source),
+                    latex=LatexProject(root=project_root, main_tex=source),
                     pdf_path=pdf_path,
                     bib_paths=bib_paths,
                     pdf_bundle=pdf_bundle,
@@ -408,7 +413,11 @@ class Orchestrator:
         findings: list[Finding] = []
         meta: dict[str, Any] = {"cache": "miss"}
         try:
-            artifacts = self._extract_only(source, include_compiled_pdf=False)
+            artifacts = self._extract_only(
+                source,
+                project_root=project_root,
+                include_compiled_pdf=False,
+            )
         except ExtractionError as error:
             raise ConfigurationError(str(error)) from error
 
