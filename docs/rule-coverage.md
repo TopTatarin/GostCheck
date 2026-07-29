@@ -38,7 +38,7 @@ records a written decision.
 | STR-05 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | ANN-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | ANN-02 | script | formal | formal suite | implemented | Registered deterministic check. |
-| ANN-03 | script | — | — | pending_decision | Implementation required; no signed scope decision exists. |
+| ANN-03 | script | formal | formal suite | implemented | Declared pages/figures/tables/appendices are compared with compiled/source counters. |
 | INT-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | INT-02 | script | formal | formal suite | implemented | Registered deterministic check. |
 | REV-01 | script | formal | formal suite | implemented | Registered deterministic check. |
@@ -75,8 +75,8 @@ records a written decision.
 ## Decisions required
 
 No written reviewer decisions are present for `ALG-02` or `IMP-02`; therefore they
-remain `pending_decision`, not `manual_required` or `excluded_scope`. `ANN-03`
-remains implementation work. `DEP-01` requires written approval of the oral norm
-before implementation. The incomplete formal portions of `ALG-01`, `ALG-03`,
-`ARC-01`, `RES-01`, `SSA-01`, and `TSK-02` are also recorded above and are not
-silently treated as covered by their semantic implementations.
+remain `pending_decision`, not `manual_required` or `excluded_scope`. `DEP-01`
+requires written approval of the oral norm before implementation. The incomplete
+formal portions of `ALG-01`, `ALG-03`, `ARC-01`, `RES-01`, `SSA-01`, and
+`TSK-02` are also recorded above and are not silently treated as covered by
+their semantic implementations.
