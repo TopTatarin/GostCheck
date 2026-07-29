@@ -109,9 +109,9 @@ The synthetic compile fixture intentionally lives below a path containing
 spaces, contains Cyrillic text and a biber bibliography, and emits a benign
 package warning while still producing a non-empty PDF. Its class retains the
 auditable `Times New Roman` requirement and uses `\IfFontExistsTF` to fall back
-to `TeX Gyre Termes` on GitHub-hosted runners. Polyglossia uses FreeSerif for
-Cyrillic glyphs missing from Ubuntu 24.04's TeX Gyre Termes. Proprietary Times
-New Roman is not installed in CI.
+to Liberation Serif on GitHub-hosted runners. The fallback is metric-compatible
+with Times New Roman and keeps Cyrillic text searchable for formal PDF metrics.
+Proprietary Times New Roman is not installed in CI.
 
 The same required job first runs the unchanged source-level `normocontrol`
 pass/fail fixtures, then installs TeX and runs the hard build checks. This

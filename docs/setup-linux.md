@@ -15,6 +15,7 @@ sudo apt-get install --no-install-recommends -y \
   biber \
   chktex \
   fonts-freefont-ttf \
+  fonts-liberation2 \
   fonts-texgyre \
   latexmk \
   texlive-bibtex-extra \
@@ -28,14 +29,15 @@ kpsewhich gost-numeric.bbx
 fc-match "FreeMono" | grep -F "FreeMono"
 fc-match "FreeSans" | grep -F "FreeSans"
 fc-match "FreeSerif" | grep -F "FreeSerif"
+fc-match "Liberation Serif" | grep -F "LiberationSerif"
 fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
 ```
 
 CI does not install proprietary Times New Roman. Synthetic classes keep the
-formal Times New Roman declaration but select TeX Gyre Termes through
-`\IfFontExistsTF` when Times New Roman is absent. Ubuntu 24.04's TeX Gyre
-Termes lacks Cyrillic glyphs, so the same branch declares FreeSerif as the
-free Cyrillic family used by Polyglossia.
+formal Times New Roman declaration but select Liberation Serif through
+`\IfFontExistsTF` when Times New Roman is absent. Liberation Serif is
+metric-compatible with Times New Roman and provides a searchable Cyrillic text
+layer, which is required for deterministic PDF typography measurements.
 
 ## Install
 

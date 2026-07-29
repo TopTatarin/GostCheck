@@ -54,11 +54,11 @@ rerun the gate. Blocking diagnostics are not suppressed with `|| true`.
 
 **Symptom:** the synthetic fixture runs on a host without Times New Roman.
 **Action:** No proprietary font is needed. The synthetic `.cls` keeps the
-Times New Roman declaration for formal inspection and falls back to TeX Gyre
-Termes at compile time via `\IfFontExistsTF`; Polyglossia uses FreeSerif for
-Cyrillic glyphs. If fallback lookup fails, verify `fc-match "TeX Gyre Termes"`
-and the `FreeSerif`, `FreeSans`, and `FreeMono` families with `fc-match`, then
-install `fonts-texgyre` and `fonts-freefont-ttf`.
+Times New Roman declaration for formal inspection and falls back to Liberation
+Serif at compile time via `\IfFontExistsTF`. If fallback lookup fails, verify
+`fc-match "Liberation Serif"` and the `FreeSerif`, `FreeSans`, and `FreeMono`
+families with `fc-match`, then install `fonts-liberation2` and
+`fonts-freefont-ttf`.
 
 ## Missing font / PDF geometry
 

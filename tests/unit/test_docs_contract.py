@@ -91,6 +91,7 @@ def test_latex_gate_docs_match_hard_ci_contract() -> None:
         "texlive-xetex",
         "biber",
         "fonts-freefont-ttf",
+        "fonts-liberation2",
         "texlive-bibtex-extra",
         "texlive-lang-cyrillic",
         "fonts-texgyre",
