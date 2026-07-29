@@ -204,6 +204,8 @@ def test_pipeline_uses_yaml_model_and_endpoint_without_source_changes(
         "MTH-02",
         "MTH-03",
         "RES-01",
+        "REV-02",
+        "REV-04",
         "REV-05",
         "REV-06",
         "SSA-04",

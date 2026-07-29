@@ -4,6 +4,42 @@ from __future__ import annotations
 
 from normocontrol.semantic.batching import RuleSpec
 
+REV_02 = RuleSpec(
+    rule_id="REV-02",
+    section_roles=("review",),
+    requirement=(
+        "Проверь только пограничные случаи формальной эвристики по доступному тексту обзора: "
+        "есть ли проверяемые признаки зарубежного издания, рецензируемого типа публикации и "
+        "основание для вывода о количестве таких источников. Не считай латиницу сама по себе "
+        "доказательством рецензирования. Если метаданных недостаточно, верни unverifiable."
+    ),
+    elements=(
+        "foreign_publication_metadata",
+        "peer_review_evidence",
+        "minimum_count_basis",
+    ),
+    max_chunks_per_section=3,
+    max_total_chunks=3,
+)
+
+REV_04 = RuleSpec(
+    rule_id="REV-04",
+    section_roles=("review",),
+    requirement=(
+        "Классифицируй пограничные источники только по явно приведённым метаданным и отметь "
+        "признаки запрещённых типов: учебник, методическое пособие, ВКР, препринт без сведений "
+        "о публикации, научно-популярный сайт или энциклопедия. Не делай вывод по одному "
+        "названию; при недостатке метаданных верни unverifiable."
+    ),
+    elements=(
+        "source_type_metadata",
+        "prohibited_type_assessment",
+        "publication_status",
+    ),
+    max_chunks_per_section=3,
+    max_total_chunks=3,
+)
+
 REV_05 = RuleSpec(
     rule_id="REV-05",
     section_roles=("review",),

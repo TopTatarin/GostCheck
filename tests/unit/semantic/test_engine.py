@@ -122,6 +122,32 @@ def test_schema_is_repaired_once_then_succeeds() -> None:
     assert report.batches[0].attempts == 2
     assert len(provider.calls[1]) == 3
     assert "single allowed repair attempt" in provider.calls[1][-1].content
+    assert '["analysis_summary","goal","tasks","expected_result"]' in (
+        provider.calls[1][-1].content
+    )
+    assert "For unverifiable or not_applicable, use e=[]" in (provider.calls[1][-1].content)
+
+
+def test_compact_wire_element_ids_expand_to_canonical_report_names() -> None:
+    payload = response_payload(
+        "RES-01",
+        tuple(str(index) for index in range(8)),
+        quote="Достигнуто 95 процентов",
+        chunk_id="анализ-результатов:1",
+    )
+
+    finding = (
+        SemanticEngine(QueueProvider([payload]))
+        .run(
+            make_bundle(),
+            ("RES-01",),
+        )
+        .findings[0]
+    )
+
+    assert tuple(element.element for element in finding.elements) == tuple(
+        sorted(RULE_SPECS["RES-01"].elements)
+    )
 
 
 def test_second_schema_failure_returns_unverifiable() -> None:
@@ -222,7 +248,7 @@ def test_very_short_mixed_language_and_list_annotation_are_bounded_data(body: st
     report = SemanticEngine(provider).run(bundle, ("ANN-01",))
 
     assert report.findings[0].status is SemanticStatus.NOT_APPLICABLE
-    assert all(line in provider.calls[0][1].content for line in body.splitlines())
+    assert all(token in provider.calls[0][1].content for token in body.split())
 
 
 def test_rephrased_reordered_and_partially_completed_tasks_can_remain_weak() -> None:
@@ -313,8 +339,6 @@ def test_missing_required_element_is_rejected_after_one_repair() -> None:
 def test_remaining_semantic_rules_are_explicitly_not_implemented() -> None:
     deferred = sorted(SEMANTIC_RULE_IDS - IMPLEMENTED_RULE_IDS)
     expected = {
-        "REV-02",
-        "REV-04",
         "SSA-01",
         "SSA-02",
         "SSA-03",

@@ -11,7 +11,7 @@ from normocontrol.extract.chunking import estimate_tokens
 from normocontrol.llm.base import LlmError, LlmProvider, LlmResponseError, LlmUnavailableError
 from normocontrol.semantic.batching import BatchPlanner, RuleBatch, RuleSpec
 from normocontrol.semantic.evidence import EvidenceVerifier, normalize_quote
-from normocontrol.semantic.prompts import render_rule_prompt, repair_message
+from normocontrol.semantic.prompts import _wire_element_ids, render_rule_prompt, repair_message
 from normocontrol.semantic.rules.algorithm import ALG_01, ALG_03
 from normocontrol.semantic.rules.annotation import ANN_01
 from normocontrol.semantic.rules.architecture import ARC_01, ARC_02
@@ -20,7 +20,7 @@ from normocontrol.semantic.rules.implementation import IMP_01
 from normocontrol.semantic.rules.introduction import INT_01
 from normocontrol.semantic.rules.mathematics import MTH_02, MTH_03
 from normocontrol.semantic.rules.results import RES_01
-from normocontrol.semantic.rules.review import REV_05, REV_06
+from normocontrol.semantic.rules.review import REV_02, REV_04, REV_05, REV_06
 from normocontrol.semantic.rules.structure import STR_05
 from normocontrol.semantic.rules.style import GEN_01, GEN_02
 from normocontrol.semantic.rules.system_analysis import SSA_04
@@ -57,6 +57,8 @@ RULE_SPECS: dict[str, RuleSpec] = {
         MTH_02,
         MTH_03,
         RES_01,
+        REV_02,
+        REV_04,
         REV_05,
         REV_06,
         SSA_04,
@@ -161,13 +163,16 @@ class SemanticEngine:
 
         for attempt in range(2):
             request_messages = (
-                messages if attempt == 0 else (*messages, repair_message(batch.spec.rule_id))
+                messages
+                if attempt == 0
+                else (*messages, repair_message(batch.spec.rule_id, batch.spec.elements))
             )
             input_tokens += sum(estimate_tokens(message.content) for message in request_messages)
             attempts += 1
             try:
                 raw = self._provider.request(request_messages, SemanticResponse)
                 candidate = SemanticResponse.model_validate(raw)
+                candidate = self._canonicalize_element_ids(candidate, batch.spec)
                 self._validate_response_for_batch(candidate, batch.spec)
                 output_tokens += estimate_tokens(candidate.model_dump_json())
                 verified = self._verified_finding(candidate, batch)
@@ -213,6 +218,26 @@ class SemanticEngine:
             attempts=attempts,
         )
         return finding, audit
+
+    @staticmethod
+    def _canonicalize_element_ids(
+        response: SemanticResponse,
+        spec: RuleSpec,
+    ) -> SemanticResponse:
+        actual = {element.element for element in response.elements}
+        canonical = set(spec.elements)
+        wire_ids = _wire_element_ids(spec.elements)
+        if not actual or actual == canonical or actual != set(wire_ids):
+            return response
+        names = dict(zip(wire_ids, spec.elements, strict=True))
+        return response.model_copy(
+            update={
+                "elements": tuple(
+                    element.model_copy(update={"element": names[element.element]})
+                    for element in response.elements
+                )
+            }
+        )
 
     @staticmethod
     def _validate_response_for_batch(response: SemanticResponse, spec: RuleSpec) -> None:

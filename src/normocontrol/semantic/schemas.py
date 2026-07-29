@@ -34,6 +34,8 @@ IMPLEMENTED_RULE_IDS = frozenset(
         "MTH-02",
         "MTH-03",
         "RES-01",
+        "REV-02",
+        "REV-04",
         "REV-05",
         "REV-06",
         "SSA-04",
