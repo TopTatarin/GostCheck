@@ -47,6 +47,7 @@ addopts = "-ra --strict-config --strict-markers -m 'not live' --import-mode=impo
 testpaths = ["tests"]
 pythonpath = ["src", "."]
 markers = [
+  "acceptance: local smoke tests that require private real-PDF paths from environment variables",
   "live: tests that use external services; excluded from the default test run",
 ]
 

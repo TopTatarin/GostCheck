@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 from typing import Any
 
@@ -33,6 +34,9 @@ _PROMPT_BLOCK = re.compile(
 )
 _TRACEBACK_START = re.compile(r"(?im)^Traceback \(most recent call last\):")
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+_MARKDOWN_INLINE = re.compile(r"([\\`*])")
+_MARKDOWN_LINK = re.compile(r"(!?)\[([^\]\r\n]*)\]\(")
+_MARKDOWN_UNDERSCORE = re.compile(r"(?<!\w)_(?=\S)|(?<=\S)_(?!\w)")
 _SENSITIVE_KEYS = frozenset(
     {
         "api_key",
@@ -112,8 +116,13 @@ def _redact_structure(value: Any, *, key: str | None) -> Any:
 
 def sanitize_evidence_text(value: str) -> str:
     """Escape markdown/HTML hazards in evidence shown in Markdown reports."""
-    cleaned = _CONTROL_CHARS.sub("", value)
-    cleaned = cleaned.replace("```", "'''")
-    cleaned = cleaned.replace("</details>", "<\\/details>")
-    cleaned = cleaned.replace("<details", "&lt;details")
-    return _truncate_public_text(redact_text(cleaned))
+    cleaned = " ".join(_CONTROL_CHARS.sub("", value).split())
+    cleaned = _truncate_public_text(redact_text(cleaned))
+    was_truncated = cleaned.endswith(TRUNCATED_TEXT)
+    if was_truncated:
+        cleaned = cleaned[: -len(TRUNCATED_TEXT)]
+    cleaned = html.escape(cleaned, quote=False)
+    cleaned = _MARKDOWN_INLINE.sub(r"\\\1", cleaned)
+    cleaned = _MARKDOWN_LINK.sub(r"\1\\[\2\\](", cleaned)
+    cleaned = _MARKDOWN_UNDERSCORE.sub(r"\\_", cleaned)
+    return f"{cleaned}{TRUNCATED_TEXT if was_truncated else ''}"

@@ -22,7 +22,23 @@
 - Artifact: `{{ header.artifact_name }}`
 {% endif %}
 
-{% macro render_group(title, items) -%}
+{% macro render_items(items) %}
+{% for item in items %}
+- **{{ item.rule_id }}** [{{ item.severity }}/{{ item.status }}]: {{ item.message }}
+  - fingerprint: `{{ item.fingerprint }}`
+  - recommendation: {{ item.recommendation }}
+{% if item.confidence is defined and item.confidence is not none %}
+  - confidence: {{ item.confidence }} _(not probability of truth)_
+{% endif %}
+{% for ev in item.evidence or [] %}
+  - evidence: `{{ ev.locator }}`{% if ev.quote %} — {{ ev.quote }}{% endif %}
+
+{% endfor %}
+
+{% endfor %}
+{% endmacro %}
+
+{% macro render_group(title, items) %}
 ### {{ title }}
 {% if not items %}
 _None._
@@ -30,33 +46,13 @@ _None._
 <details>
 <summary>{{ items|length }} items (click to expand)</summary>
 
-{% for item in items %}
-- **{{ item.rule_id }}** [{{ item.severity }}/{{ item.status }}]: {{ item.message }}
-  - fingerprint: `{{ item.fingerprint }}`
-  - recommendation: {{ item.recommendation }}
-  {%- if item.confidence is defined and item.confidence is not none %}
-  - confidence: {{ item.confidence }} _(not probability of truth)_
-  {%- endif %}
-  {%- for ev in item.evidence or [] %}
-  - evidence: `{{ ev.locator }}`{% if ev.quote %} — {{ ev.quote }}{% endif %}
-  {%- endfor %}
-{% endfor %}
+{{ render_items(items) }}
 
 </details>
 {% else %}
-{% for item in items %}
-- **{{ item.rule_id }}** [{{ item.severity }}/{{ item.status }}]: {{ item.message }}
-  - fingerprint: `{{ item.fingerprint }}`
-  - recommendation: {{ item.recommendation }}
-  {%- if item.confidence is defined and item.confidence is not none %}
-  - confidence: {{ item.confidence }} _(not probability of truth)_
-  {%- endif %}
-  {%- for ev in item.evidence or [] %}
-  - evidence: `{{ ev.locator }}`{% if ev.quote %} — {{ ev.quote }}{% endif %}
-  {%- endfor %}
-{% endfor %}
+{{ render_items(items) }}
 {% endif %}
-{%- endmacro %}
+{% endmacro %}
 
 {{ render_group("Formal errors", groups.formal_errors) }}
 
