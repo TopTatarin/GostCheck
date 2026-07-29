@@ -304,6 +304,7 @@ def test_setup_installs_and_verifies_minimal_tex_toolchain() -> None:
         "texlive-xetex",
         "biber",
         "fonts-freefont-ttf",
+        "fonts-liberation2",
         "texlive-bibtex-extra",
         "texlive-lang-cyrillic",
         "fonts-texgyre",
@@ -316,6 +317,7 @@ def test_setup_installs_and_verifies_minimal_tex_toolchain() -> None:
     assert 'fc-match "FreeMono" | grep -F "FreeMono"' in script
     assert 'fc-match "FreeSans" | grep -F "FreeSans"' in script
     assert 'fc-match "FreeSerif" | grep -F "FreeSerif"' in script
+    assert 'fc-match "Liberation Serif" | grep -F "LiberationSerif"' in script
     assert 'fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"' in script
     assert "ttf-mscorefonts-installer" not in script
     assert "msttcorefonts" not in script

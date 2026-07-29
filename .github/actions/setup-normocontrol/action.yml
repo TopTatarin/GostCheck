@@ -30,6 +30,7 @@ runs:
           biber \
           chktex \
           fonts-freefont-ttf \
+          fonts-liberation2 \
           fonts-texgyre \
           latexmk \
           texlive-bibtex-extra \
@@ -46,6 +47,7 @@ runs:
         fc-match "FreeMono" | grep -F "FreeMono"
         fc-match "FreeSans" | grep -F "FreeSans"
         fc-match "FreeSerif" | grep -F "FreeSerif"
+        fc-match "Liberation Serif" | grep -F "LiberationSerif"
         fc-match "TeX Gyre Termes" | grep -F "TeX Gyre Termes"
     - name: Set up Python
       if: ${{ inputs.install-python == 'true' }}

@@ -162,6 +162,10 @@ def test_pdf_metric_helpers() -> None:
         "ABCDEF+TeXGyreTermes-Bold",
         "TeX Gyre Termes Italic",
         "TeXGyreTermes-BoldItalic",
+        "ABCDEF+LiberationSerif-Regular",
+        "Liberation Serif Bold",
+        "LiberationSerif-Italic",
+        "LiberationSerif-BoldItalic",
     ],
 )
 def test_times_compatible_aliases_are_explicit(font: str) -> None:
@@ -178,7 +182,7 @@ def test_tempora_requires_an_explicit_alias() -> None:
 
 @pytest.mark.parametrize(
     "font",
-    ["Helvetica", "Arial", "LiberationSerif-Regular", "Bookman-Serif"],
+    ["Helvetica", "Arial", "DejaVuSerif", "Bookman-Serif"],
 )
 def test_non_alias_fonts_are_not_times_compatible(font: str) -> None:
     assert not is_times_new_roman(font)

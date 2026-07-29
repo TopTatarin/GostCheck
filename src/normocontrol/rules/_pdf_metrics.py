@@ -45,6 +45,10 @@ TIMES_COMPATIBLE_ALIASES: frozenset[str] = frozenset(
         "TeXGyreTermes-Bold",
         "TeXGyreTermes-Italic",
         "TeXGyreTermes-BoldItalic",
+        "LiberationSerif-Regular",
+        "LiberationSerif-Bold",
+        "LiberationSerif-Italic",
+        "LiberationSerif-BoldItalic",
     }
 )
 
