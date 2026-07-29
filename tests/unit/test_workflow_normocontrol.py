@@ -14,6 +14,7 @@ from normocontrol.orchestrator import OrchestratorHooks, run_pipeline
 from normocontrol.tools.latexmk import LatexBuildResult, LatexBuildService, LatexBuildStatus
 
 ROOT = Path(__file__).resolve().parents[2]
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 WORKFLOW = ROOT / ".github" / "workflows" / "normocontrol.yml"
 REUSABLE_WORKFLOW = ROOT / ".github" / "workflows" / "reusable-thesis.yml"
 SETUP_ACTION = ROOT / ".github" / "actions" / "setup-normocontrol" / "action.yml"
@@ -56,6 +57,27 @@ def test_workflow_yaml_parses_and_required_job_names() -> None:
         )
     }
     assert required_rows == set(REQUIRED_JOBS)
+
+
+@pytest.mark.parametrize(
+    ("workflow_path", "job_name"),
+    (
+        (CI_WORKFLOW, "quality"),
+        (WORKFLOW, "lint-and-unit"),
+    ),
+)
+def test_quality_jobs_check_ruff_format_before_lint(
+    workflow_path: Path,
+    job_name: str,
+) -> None:
+    job = _load_yaml(workflow_path)["jobs"][job_name]
+    commands = [step.get("run") for step in _job_steps(job)]
+
+    assert commands.count("python -m ruff format --check .") == 1
+    assert commands.count("python -m ruff check .") == 1
+    assert commands.index("python -m ruff format --check .") < commands.index(
+        "python -m ruff check ."
+    )
 
 
 def test_workflow_permissions_and_triggers() -> None:
