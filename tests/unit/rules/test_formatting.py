@@ -158,6 +158,10 @@ def test_pdf_metric_helpers() -> None:
         "Times-Italic",
         "Tempora-Bold",
         "Tempora-Italic",
+        "TeXGyreTermes-Regular",
+        "ABCDEF+TeXGyreTermes-Bold",
+        "TeX Gyre Termes Italic",
+        "TeXGyreTermes-BoldItalic",
     ],
 )
 def test_times_compatible_aliases_are_explicit(font: str) -> None:

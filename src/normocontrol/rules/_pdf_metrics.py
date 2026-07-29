@@ -41,6 +41,10 @@ TIMES_COMPATIBLE_ALIASES: frozenset[str] = frozenset(
         "Tempora-Bold",
         "Tempora-Italic",
         "Tempora-BoldItalic",
+        "TeXGyreTermes-Regular",
+        "TeXGyreTermes-Bold",
+        "TeXGyreTermes-Italic",
+        "TeXGyreTermes-BoldItalic",
     }
 )
 
