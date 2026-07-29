@@ -1,0 +1,81 @@
+# Rubric rule coverage
+
+This matrix is the machine-checked coverage inventory for the 64 rules in
+`rubric.yaml`. `pending_decision` is deliberately not PASS: no rule is classified
+as `manual_required` or `excluded_scope` until a responsible norm-control reviewer
+records a written decision.
+
+| rule_id | layer | implementation | test | status | rationale |
+| --- | --- | --- | --- | --- | --- |
+| SYS-01 | script | formal | formal suite | implemented | Registered deterministic check. |
+| SYS-02 | script | formal | formal suite | implemented | Registered deterministic check. |
+| SYS-03 | script | formal | formal suite | implemented | Registered deterministic check. |
+| FMT-01 | class | formal | formal suite | implemented | Registered deterministic check. |
+| FMT-02 | class | formal | formal suite | implemented | Registered deterministic check. |
+| FMT-03 | class | formal | formal suite | implemented | Registered deterministic check. |
+| FMT-04 | class | formal | formal suite | implemented | Registered deterministic check. |
+| FMT-05 | class | formal | formal suite | implemented | Registered deterministic check. |
+| FIG-01 | script | formal | formal suite | implemented | Registered deterministic check. |
+| FIG-02 | script | formal | formal suite | implemented | Registered deterministic check. |
+| FIG-03 | class+script | formal | formal suite | implemented | Registered deterministic check. |
+| FIG-04 | class | formal | formal suite | implemented | Registered deterministic check. |
+| FIG-05 | class | formal | formal suite | implemented | Registered deterministic check. |
+| FIG-06 | class | formal | formal suite | implemented | Registered deterministic check. |
+| FIG-07 | class | formal | formal suite | implemented | Registered deterministic check. |
+| TAB-01 | class | formal | formal suite | implemented | Registered deterministic check. |
+| TAB-02 | class+script | formal | formal suite | implemented | Registered deterministic check. |
+| TAB-03 | script | formal | formal suite | implemented | Registered deterministic check. |
+| CAP-01 | script | formal | formal suite | implemented | Registered deterministic check. |
+| BIB-01 | script | formal | formal suite | implemented | Registered deterministic check. |
+| BIB-02 | class+script | formal | formal suite | implemented | Registered deterministic check. |
+| BIB-03 | class+script | formal | formal suite | implemented | Registered deterministic check. |
+| BIB-04 | script | formal | formal suite | implemented | Registered deterministic check. |
+| BIB-05 | script | formal | formal suite | implemented | Registered deterministic check. |
+| STR-01 | script | formal | formal suite | implemented | Registered deterministic check. |
+| STR-02 | class | formal | formal suite | implemented | Registered deterministic check. |
+| STR-03 | script | formal | formal suite | implemented | Registered deterministic check. |
+| STR-04 | script | formal | formal suite | implemented | Registered deterministic check. |
+| STR-05 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| ANN-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| ANN-02 | script | formal | formal suite | implemented | Registered deterministic check. |
+| ANN-03 | script | — | — | pending_decision | Implementation required; no signed scope decision exists. |
+| INT-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| INT-02 | script | formal | formal suite | implemented | Registered deterministic check. |
+| REV-01 | script | formal | formal suite | implemented | Registered deterministic check. |
+| REV-02 | script+llm | formal + semantic | formal + semantic suites | implemented | Heuristic plus strict advisory classification of edge cases. |
+| REV-03 | script | formal | formal suite | implemented | Registered deterministic check. |
+| REV-04 | script+llm | formal + semantic | formal + semantic suites | implemented | Blacklist plus strict advisory classification of edge cases. |
+| REV-05 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| REV-06 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| REV-07 | script | formal | formal suite | implemented | Registered deterministic check. |
+| SSA-01 | script+llm | — | — | not_implemented | Formal and semantic portions are pending. |
+| SSA-02 | llm | — | — | not_implemented | Semantic applicability and element contract are pending. |
+| SSA-03 | llm | — | — | not_implemented | Semantic applicability and element contract are pending. |
+| SSA-04 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| TSK-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| TSK-02 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal heuristic is pending. |
+| TSK-03 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| ARC-01 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal figure check is pending. |
+| ARC-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| MTH-01 | class+script | formal | formal suite | implemented | Registered deterministic check. |
+| MTH-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| MTH-03 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| ALG-01 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal presence check is pending. |
+| ALG-02 | vision | — | — | pending_decision | Vision/manual scope needs a signed reviewer decision. |
+| ALG-03 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal regex is pending. |
+| IMP-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| IMP-02 | vision | — | — | pending_decision | Vision/manual scope needs a signed reviewer decision. |
+| RES-01 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal presence check is pending. |
+| CON-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| APP-01 | script | — | — | pending_decision | Implementation required; no signed scope decision exists. |
+| GEN-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| GEN-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
+| DEP-01 | script | — | — | pending_decision | Implementation requires approved oral-norm scope. |
+
+## Decisions required
+
+No written reviewer decisions are present for `ALG-02` or `IMP-02`; therefore they
+remain `pending_decision`, not `manual_required` or `excluded_scope`. `ANN-03`,
+`APP-01`, and `DEP-01` remain implementation work. The incomplete formal portions
+of `ALG-01`, `ALG-03`, `ARC-01`, `RES-01`, and `TSK-02` are also recorded above
+and are not silently treated as covered by their semantic implementations.

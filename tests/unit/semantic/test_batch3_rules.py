@@ -211,10 +211,10 @@ def test_str05_unicode_long_document_still_exposes_only_heading() -> None:
 def test_batch3_findings_are_sorted_text_safe_and_never_fail() -> None:
     report = SemanticEngine(QueueProvider([_valid_payload()])).run(
         _heading_bundle(),
-        (RULE_ID, "REV-02"),
+        (RULE_ID, "SSA-01"),
     )
 
-    assert [item.rule_id for item in report.findings] == ["REV-02", RULE_ID]
+    assert [item.rule_id for item in report.findings] == ["SSA-01", RULE_ID]
     assert [item.rule_id for item in report.batches] == [RULE_ID]
     assert all(item.status.value != "fail" for item in report.findings)
     audit_json = report.batches[0].model_dump_json()
