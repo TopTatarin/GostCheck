@@ -32,6 +32,7 @@ from normocontrol.orchestrator import run_pipeline
 from normocontrol.reporting.console import (
     build_console_summary,
     build_error_console_summary,
+    console_safe_text,
     render_console_summary,
 )
 from normocontrol.reporting.redaction import redact_text
@@ -87,8 +88,19 @@ def package_version() -> str:
 def version_callback(value: bool) -> None:
     """Print the version requested by Typer's eager option."""
     if value:
-        typer.echo(package_version())
+        echo_console(package_version())
         raise typer.Exit
+
+
+def echo_console(
+    message: str,
+    *,
+    err: bool = False,
+    output: TextIO | None = None,
+) -> None:
+    """Write normalized text without failing on the active stream encoding."""
+    stream = output if output is not None else (sys.stderr if err else sys.stdout)
+    typer.echo(console_safe_text(message, stream), file=stream)
 
 
 def collect_doctor_checks(settings: DoctorSettings | None = None) -> tuple[DoctorCheck, ...]:
@@ -119,8 +131,9 @@ def collect_doctor_checks(settings: DoctorSettings | None = None) -> tuple[Docto
 
 def render_doctor(checks: Sequence[DoctorCheck], output: TextIO | None = None) -> None:
     """Render doctor diagnostics to a terminal-safe plain table."""
+    stream = output if output is not None else sys.stdout
     console = Console(
-        file=output or sys.stdout,
+        file=stream,
         force_terminal=False,
         color_system=None,
         soft_wrap=True,
@@ -130,7 +143,11 @@ def render_doctor(checks: Sequence[DoctorCheck], output: TextIO | None = None) -
     table.add_column("Status")
     table.add_column("Details")
     for check in checks:
-        table.add_row(check.component, "OK" if check.available else "not found", check.detail)
+        table.add_row(
+            console_safe_text(check.component, stream),
+            "OK" if check.available else "not found",
+            console_safe_text(check.detail, stream),
+        )
     console.print(table)
 
 
@@ -196,7 +213,7 @@ def _emit_error_run_summary(
         exit_code=exit_code,
         reason=reason,
     )
-    typer.echo(render_console_summary(summary))
+    echo_console(render_console_summary(summary))
 
 
 def load_effective_rubric_for_check(
@@ -316,7 +333,7 @@ def llm_doctor(
             no_llm=no_llm,
         )
     except ConfigurationError as error:
-        typer.echo(f"ERROR {error}", err=True)
+        echo_console(f"ERROR {error}", err=True)
         raise typer.Exit(code=1) from error
 
     selected: LlmProvider
@@ -330,7 +347,7 @@ def llm_doctor(
     status = "OK" if probe.available and probe.model_available else "UNVERIFIABLE"
     if config.provider is ProviderName.DISABLED:
         status = "SKIPPED"
-    typer.echo(f"provider={probe.provider} status={status} detail={probe.detail}")
+    echo_console(f"provider={probe.provider} status={status} detail={probe.detail}")
 
 
 def emit_bundle(bundle: DocumentBundle, output_path: Path) -> None:
@@ -372,7 +389,7 @@ def semantic_command(
         )
         bundle = DocumentBundle.model_validate_json(bundle_path.read_text(encoding="utf-8"))
     except (ConfigurationError, OSError, ValidationError) as error:
-        typer.echo(f"ERROR cannot load semantic input: {type(error).__name__}", err=True)
+        echo_console(f"ERROR cannot load semantic input: {type(error).__name__}", err=True)
         raise typer.Exit(code=1) from error
 
     selected: LlmProvider
@@ -471,7 +488,7 @@ def run_command(
         report = run_pipeline(request)
     except ConfigurationError as error:
         reason = redact_text(str(error))
-        typer.echo(f"ERROR {reason}", err=True)
+        echo_console(f"ERROR {reason}", err=True)
         _emit_error_run_summary(
             source=source,
             out_dir=out,
@@ -483,7 +500,7 @@ def run_command(
         raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
     except LocatedValidationError as error:
         reason = redact_text(str(error))
-        typer.echo(f"ERROR {reason}", err=True)
+        echo_console(f"ERROR {reason}", err=True)
         _emit_error_run_summary(
             source=source,
             out_dir=out,
@@ -495,7 +512,7 @@ def run_command(
         raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
     except LockError as error:
         reason = redact_text(str(error))
-        typer.echo(f"ERROR {reason}", err=True)
+        echo_console(f"ERROR {reason}", err=True)
         _emit_error_run_summary(
             source=source,
             out_dir=out,
@@ -507,7 +524,7 @@ def run_command(
         raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
     except Exception as error:
         reason = f"internal failure: {type(error).__name__}"
-        typer.echo(f"ERROR {reason}", err=True)
+        echo_console(f"ERROR {reason}", err=True)
         _emit_error_run_summary(
             source=source,
             out_dir=out,
@@ -531,7 +548,7 @@ def run_command(
         provider=provider_name,
         published=published,
     )
-    typer.echo(render_console_summary(summary))
+    echo_console(render_console_summary(summary))
     raise typer.Exit(code=int(report.exit_code))
 
 
@@ -564,7 +581,7 @@ def check_command(
             project_root=project_root,
         )
     except (ExtractionError, LocatedValidationError) as error:
-        typer.echo(f"ERROR {error}", err=True)
+        echo_console(f"ERROR {error}", err=True)
         raise typer.Exit(code=1) from error
 
     emit_report(report, output)
@@ -596,7 +613,7 @@ def extract_command(
             raise ExtractionError("supported source extensions are .tex and .pdf")
         emit_bundle(bundle, output)
     except ExtractionError as error:
-        typer.echo(f"ERROR {error}", err=True)
+        echo_console(f"ERROR {error}", err=True)
         raise typer.Exit(code=1) from error
 
 
@@ -613,19 +630,19 @@ def rubric_validate(
     try:
         effective = load_effective_rubric(rubric, config)
     except LocatedValidationError as error:
-        typer.echo(f"ERROR {error}", err=True)
+        echo_console(f"ERROR {error}", err=True)
         raise typer.Exit(code=3) from error
 
     counts = {severity: 0 for severity in ("error", "warn", "info")}
     for rule in effective.rules:
         counts[rule.severity.value] += 1
-    typer.echo(
+    echo_console(
         f"OK: 64 rules; severity error={counts['error']}, "
         f"warn={counts['warn']}, info={counts['info']}; "
         f"profile={effective.work_profile.value}"
     )
     for warning in effective.warnings:
-        typer.echo(f"WARNING {warning.code} {warning.yaml_path}: {warning.message}")
+        echo_console(f"WARNING {warning.code} {warning.yaml_path}: {warning.message}")
 
 
 if __name__ == "__main__":

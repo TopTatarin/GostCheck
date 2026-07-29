@@ -6,7 +6,8 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
+from unicodedata import normalize
 
 from normocontrol.domain import ExitCode, FindingStatus, RunReport
 from normocontrol.reporting.json_report import collect_findings
@@ -41,6 +42,18 @@ class ConsoleRunSummary:
     exit_code: ExitCode
 
 
+def console_safe_text(value: str, stream: TextIO) -> str:
+    """Return NFC text representable by a console or redirected text stream."""
+    normalized = normalize("NFC", value)
+    encoding = stream.encoding
+    if not encoding:
+        return normalized
+    try:
+        return normalized.encode(encoding, errors="backslashreplace").decode(encoding)
+    except LookupError:
+        return normalized.encode("ascii", errors="backslashreplace").decode("ascii")
+
+
 def safe_display_path(
     path: Path,
     *,
@@ -54,8 +67,10 @@ def safe_display_path(
         relative = resolved.relative_to(display_base)
     except ValueError:
         safe_tail = "/".join(resolved.parts[-max(1, tail_parts) :])
-        return f"…/{redact_text(safe_tail) or '<unnamed>'}"
-    return "." if not relative.parts else redact_text(relative.as_posix())
+        displayed = f"…/{redact_text(safe_tail) or '<unnamed>'}"
+        return normalize("NFC", displayed)
+    displayed = "." if not relative.parts else redact_text(relative.as_posix())
+    return normalize("NFC", displayed)
 
 
 def _published_header(published: Mapping[str, Any] | None) -> Mapping[str, Any]:
@@ -162,19 +177,22 @@ def render_console_summary(summary: ConsoleRunSummary) -> str:
         return path if generated else f"{path} (not generated)"
 
     meaning = EXIT_CODE_MEANINGS[summary.exit_code]
-    return "\n".join(
-        (
-            "GostCheck run summary",
-            f"input: {summary.source}",
-            f"profile: {summary.profile}",
-            f"provider: {summary.provider}",
-            f"gate: {summary.gate}",
-            f"degraded: {str(summary.degraded).lower()}",
-            f"degraded_reason: {summary.degraded_reason}",
-            f"counts: {counts}",
-            f"blocking_findings: {blocking}",
-            f"report.md: {artifact(summary.report_md, summary.report_md_generated)}",
-            f"report.json: {artifact(summary.report_json, summary.report_json_generated)}",
-            f"exit_code: {int(summary.exit_code)} ({meaning})",
-        )
+    return normalize(
+        "NFC",
+        "\n".join(
+            (
+                "GostCheck run summary",
+                f"input: {summary.source}",
+                f"profile: {summary.profile}",
+                f"provider: {summary.provider}",
+                f"gate: {summary.gate}",
+                f"degraded: {str(summary.degraded).lower()}",
+                f"degraded_reason: {summary.degraded_reason}",
+                f"counts: {counts}",
+                f"blocking_findings: {blocking}",
+                f"report.md: {artifact(summary.report_md, summary.report_md_generated)}",
+                f"report.json: {artifact(summary.report_json, summary.report_json_generated)}",
+                f"exit_code: {int(summary.exit_code)} ({meaning})",
+            )
+        ),
     )
