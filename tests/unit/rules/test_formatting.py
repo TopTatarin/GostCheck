@@ -21,6 +21,7 @@ from normocontrol.rules._pdf_metrics import (
     font_size_match_ratio,
     is_times_new_roman,
     select_body_spans,
+    significant_character_count,
     span_is_bold,
     times_new_roman_ratio,
 )
@@ -151,6 +152,10 @@ def test_pdf_metric_helpers() -> None:
         "Times New Roman",
         "Times-Roman",
         "Tempora-Regular",
+        "TimesNewRomanPS-BoldMT",
+        "Times-Italic",
+        "Tempora-Bold",
+        "Tempora-Italic",
     ],
 )
 def test_times_compatible_aliases_are_explicit(font: str) -> None:
@@ -201,8 +206,16 @@ def test_fmt01_excludes_heading_and_code_from_body_ratio() -> None:
         y0=150.0,
     )
     heading = _span(text="Heading", font="Helvetica", font_size=16.0, y0=100.0)
-    code = _span(text="print('synthetic')", font="Courier", font_size=10.0, y0=200.0)
-    bundle = _pdf_bundle(heading, body, code, pages=(page,))
+    code = tuple(
+        _span(
+            text=text,
+            font="Courier",
+            font_size=10.0,
+            y0=200.0 + index * 14.0,
+        )
+        for index, text in enumerate(("for item in values:", "    print(item)", "    return item"))
+    )
+    bundle = _pdf_bundle(heading, body, *code, pages=(page,))
 
     selection = select_body_spans(bundle.spans, bundle.pages)
     outcome = Fmt01BodyFontRule().run(
@@ -212,6 +225,382 @@ def test_fmt01_excludes_heading_and_code_from_body_ratio() -> None:
 
     assert selection.spans == (bundle.spans[1],)
     assert outcome.findings[0].status is FindingStatus.PASS
+
+
+def test_fmt01_characterization_keeps_ordinary_14pt_body() -> None:
+    body = _span(
+        text="Ordinary synthetic paragraph in the expected font and size.",
+        font="Times-Roman",
+        font_size=14.0,
+    )
+
+    selection = select_body_spans((body,), ())
+
+    assert selection.spans == (body,)
+    assert selection.significant_chars == significant_character_count(body.text)
+    assert selection.excluded_chars == ()
+
+
+def test_fmt01_characterization_keeps_ordinary_12pt_body_and_lowers_ratio() -> None:
+    body = _span(
+        text="Ordinary synthetic paragraph using a nonconforming twelve point size.",
+        font="Times-Roman",
+        font_size=12.0,
+    )
+
+    selection = select_body_spans((body,), ())
+
+    assert selection.spans == (body,)
+    assert font_size_match_ratio(selection.spans, expected_pt=14.0) == 0.0
+
+
+def test_fmt01_inline_bold_times_variant_stays_compatible_body() -> None:
+    spans = (
+        _span(text="Ordinary body with ", x0=100.0, x1=220.0),
+        _span(
+            text="emphasis",
+            font="Tempora-Bold",
+            flags=20,
+            x0=220.0,
+            x1=280.0,
+        ),
+        _span(text=" retained in the measured line.", x0=280.0, x1=470.0),
+    )
+
+    selection = select_body_spans(spans, ())
+
+    assert selection.spans == spans
+    assert times_new_roman_ratio(selection.spans) == 1.0
+
+
+def test_fmt01_characterization_excludes_large_confirmed_heading() -> None:
+    body = _span(
+        text="Ordinary synthetic paragraph with enough text to establish body size.",
+        font="Times-Roman",
+        font_size=14.0,
+        y0=140.0,
+    )
+    heading = _span(
+        text="Synthetic heading",
+        font="Helvetica",
+        font_size=18.0,
+        y0=90.0,
+    )
+
+    selection = select_body_spans((body, heading), ())
+
+    assert selection.spans == (body,)
+    assert dict(selection.excluded_chars)["heading"] == significant_character_count(heading.text)
+
+
+def test_fmt01_excludes_isolated_full_bold_heading_at_body_size() -> None:
+    spans = (
+        _span(
+            text="Synthetic bold section heading",
+            font="Tempora-Bold",
+            font_size=14.0,
+            flags=20,
+            y0=80.0,
+        ),
+        _span(
+            text="Ordinary body line one with enough text for measurement.",
+            y0=122.0,
+        ),
+        _span(
+            text="Ordinary body line two with enough text for measurement.",
+            y0=143.0,
+        ),
+    )
+
+    selection = select_body_spans(spans, ())
+
+    assert selection.spans == spans[1:]
+    assert dict(selection.excluded_chars)["heading"] == significant_character_count(spans[0].text)
+
+
+def test_fmt01_characterization_excludes_caption_and_repeated_footer() -> None:
+    pages = (
+        PageInfo(number=1, width=595.0, height=842.0, rotation=0),
+        PageInfo(number=2, width=595.0, height=842.0, rotation=0),
+    )
+    spans = (
+        _span(text="Body page one remains measurable.", page=1, y0=140.0),
+        _span(text="Рисунок 1 — Synthetic caption", page=1, font_size=10.0, y0=500.0),
+        _span(text="Synthetic repeated footer", page=1, font_size=10.0, y0=810.0),
+        _span(text="Body page two remains measurable.", page=2, y0=140.0),
+        _span(text="Synthetic repeated footer", page=2, font_size=10.0, y0=810.0),
+    )
+
+    selection = select_body_spans(spans, pages)
+    excluded = dict(selection.excluded_chars)
+
+    assert selection.spans == (spans[0], spans[3])
+    assert excluded["caption"] == significant_character_count(spans[1].text)
+    assert excluded["repeated_footer"] == 2 * significant_character_count(spans[2].text)
+
+
+def test_fmt01_multiline_monospace_listing_is_excluded_by_context() -> None:
+    body = _span(
+        text="Ordinary synthetic paragraph remains in the body population.",
+        y0=120.0,
+    )
+    listing = tuple(
+        _span(
+            text=text,
+            font="SFTT1200",
+            font_size=12.0,
+            x0=110.0,
+            y0=200.0 + index * 15.0,
+        )
+        for index, text in enumerate(
+            (
+                "def calculate(value):",
+                "    result = value + 1",
+                "    return result",
+            )
+        )
+    )
+
+    selection = select_body_spans((body, *listing), ())
+
+    assert selection.spans == (body,)
+    assert dict(selection.excluded_chars)["listing"] == sum(
+        significant_character_count(span.text) for span in listing
+    )
+
+
+def test_fmt01_short_inline_monospace_is_retained_with_diagnostic() -> None:
+    spans = (
+        _span(text="Use ", x0=100.0, x1=130.0, y0=140.0),
+        _span(
+            text="value_name",
+            font="Courier",
+            font_size=14.0,
+            x0=130.0,
+            x1=205.0,
+            y0=140.0,
+        ),
+        _span(text=" in this ordinary sentence.", x0=205.0, x1=380.0, y0=140.0),
+    )
+
+    selection = select_body_spans(spans, ())
+
+    assert selection.spans == spans
+    assert dict(selection.retained_chars)["inline_code"] == significant_character_count(
+        spans[1].text
+    )
+    assert "listing" not in dict(selection.excluded_chars)
+
+
+def test_fmt01_formula_context_excludes_computer_modern_line() -> None:
+    body = _span(
+        text="Ordinary synthetic paragraph remains measurable.",
+        y0=140.0,
+    )
+    formula = (
+        _span(text="x", font="CMMI12", x0=220.0, x1=230.0, y0=220.0),
+        _span(text="=", font="CMR12", x0=232.0, x1=242.0, y0=220.0),
+        _span(text="y", font="CMMI12", x0=244.0, x1=254.0, y0=220.0),
+        _span(text="+", font="CMSY10", font_size=10.0, x0=256.0, x1=264.0, y0=223.0),
+        _span(text="1", font="CMR12", x0=266.0, x1=276.0, y0=220.0),
+    )
+
+    selection = select_body_spans((body, *formula), ())
+
+    assert selection.spans == (body,)
+    assert dict(selection.excluded_chars)["formula"] == sum(
+        significant_character_count(span.text) for span in formula
+    )
+
+
+def test_fmt01_ordinary_computer_modern_without_math_context_stays_body() -> None:
+    body = _span(
+        text="Ordinary prose set in Computer Modern remains a body violation.",
+        font="CMR12",
+        font_size=14.0,
+    )
+
+    selection = select_body_spans((body,), ())
+
+    assert selection.spans == (body,)
+    assert dict(selection.retained_chars)["unconfirmed_math"] == significant_character_count(
+        body.text
+    )
+
+
+def test_fmt01_math_font_name_without_formula_context_stays_body() -> None:
+    span = _span(
+        text="variable",
+        font="CMMI12",
+        font_size=14.0,
+    )
+
+    selection = select_body_spans((span,), ())
+
+    assert selection.spans == (span,)
+    assert dict(selection.retained_chars)["unconfirmed_math"] == significant_character_count(
+        span.text
+    )
+
+
+def test_fmt01_mixed_page_excludes_table_formula_and_listing_only() -> None:
+    body = _span(
+        text="Ordinary synthetic body is the only measured paragraph.",
+        y0=120.0,
+    )
+    table = (
+        _span(text="Metric", font_size=10.0, x0=100.0, x1=150.0, y0=180.0),
+        _span(text="Value", font_size=10.0, x0=300.0, x1=340.0, y0=180.0),
+        _span(text="Alpha", font_size=10.0, x0=100.0, x1=145.0, y0=195.0),
+        _span(text="10", font_size=10.0, x0=300.0, x1=315.0, y0=195.0),
+        _span(text="Beta", font_size=10.0, x0=100.0, x1=140.0, y0=210.0),
+        _span(text="20", font_size=10.0, x0=300.0, x1=315.0, y0=210.0),
+    )
+    formula = (
+        _span(text="a", font="CMMI12", x0=220.0, x1=230.0, y0=260.0),
+        _span(text="=", font="CMR12", x0=232.0, x1=242.0, y0=260.0),
+        _span(text="b", font="CMMI12", x0=244.0, x1=254.0, y0=260.0),
+    )
+    listing = tuple(
+        _span(
+            text=text,
+            font="Courier",
+            font_size=10.0,
+            x0=110.0,
+            y0=310.0 + index * 14.0,
+        )
+        for index, text in enumerate(("if ready:", "    run()", "    return 0"))
+    )
+
+    selection = select_body_spans((body, *table, *formula, *listing), ())
+    excluded = dict(selection.excluded_chars)
+
+    assert selection.spans == (body,)
+    assert excluded["table"] == sum(significant_character_count(span.text) for span in table)
+    assert excluded["formula"] == sum(significant_character_count(span.text) for span in formula)
+    assert excluded["listing"] == sum(significant_character_count(span.text) for span in listing)
+
+
+def test_fmt01_invalid_bbox_is_counted_and_never_hidden() -> None:
+    invalid = _span(text="Damaged synthetic body").model_copy(
+        update={"bbox": BoundingBox(x0=100.0, y0=100.0, x1=100.0, y1=114.0)}
+    )
+
+    selection = select_body_spans((invalid,), ())
+
+    assert selection.spans == ()
+    assert selection.invalid_bbox_count == 1
+    assert dict(selection.excluded_chars)["invalid_bbox"] == significant_character_count(
+        invalid.text
+    )
+
+
+def test_fmt01_insufficient_matching_body_is_unverifiable_not_pass() -> None:
+    bundle = _pdf_bundle(_span(text="tiny", font="Times-Roman", font_size=14.0))
+
+    outcome = Fmt01BodyFontRule().run(
+        _pdf_context("FMT-01", bundle),
+        effective_rule("FMT-01", layer="class"),
+    )
+
+    assert outcome.findings[0].status is FindingStatus.UNVERIFIABLE
+    assert "insufficient_body_text" in (outcome.findings[0].evidence[0].description or "")
+
+
+@pytest.mark.parametrize(
+    ("matching_chars", "expected_status"),
+    (
+        (95, FindingStatus.PASS),
+        (94, FindingStatus.FAIL),
+        (96, FindingStatus.PASS),
+    ),
+    ids=("exactly-95-percent", "below-95-percent", "above-95-percent"),
+)
+def test_fmt01_enforces_unchanged_95_percent_boundary(
+    matching_chars: int,
+    expected_status: FindingStatus,
+) -> None:
+    mismatching_chars = 100 - matching_chars
+    spans = (
+        _span(text="a" * matching_chars, font="Times-Roman", font_size=14.0, y0=120.0),
+        _span(text="b" * mismatching_chars, font="Helvetica", font_size=12.0, y0=140.0),
+    )
+    bundle = _pdf_bundle(*spans)
+
+    outcome = Fmt01BodyFontRule().run(
+        _pdf_context("FMT-01", bundle),
+        effective_rule("FMT-01", layer="class"),
+    )
+
+    assert outcome.findings[0].status is expected_status
+
+
+def test_fmt01_span_permutation_preserves_selection_and_evidence() -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    spans = (
+        _span(text="a" * 95, font="Times-Roman", font_size=14.0, y0=120.0),
+        _span(text="b" * 5, font="Helvetica", font_size=12.0, y0=140.0),
+        _span(text="Synthetic heading", font="Helvetica", font_size=18.0, y0=80.0),
+    )
+    first_bundle = _pdf_bundle(*spans, pages=(page,))
+    second_bundle = _pdf_bundle(*reversed(spans), pages=(page,))
+
+    first_selection = select_body_spans(first_bundle.spans, first_bundle.pages)
+    second_selection = select_body_spans(second_bundle.spans, second_bundle.pages)
+    first = Fmt01BodyFontRule().run(
+        _pdf_context("FMT-01", first_bundle),
+        effective_rule("FMT-01", layer="class"),
+    )
+    second = Fmt01BodyFontRule().run(
+        _pdf_context("FMT-01", second_bundle),
+        effective_rule("FMT-01", layer="class"),
+    )
+
+    assert first_selection.significant_chars == second_selection.significant_chars
+    assert first_selection.excluded_chars == second_selection.excluded_chars
+    assert first.findings[0].model_dump() == second.findings[0].model_dump()
+
+
+def test_fmt01_evidence_explains_denominators_distributions_and_exclusions() -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    body = _span(
+        text="Expected synthetic body paragraph with enough measurable characters.",
+        y0=120.0,
+    )
+    mismatch = _span(
+        text="wrong-size",
+        font="Helvetica",
+        font_size=12.0,
+        y0=145.0,
+    )
+    listing = tuple(
+        _span(
+            text=text,
+            font="Courier",
+            font_size=10.0,
+            y0=200.0 + index * 14.0,
+        )
+        for index, text in enumerate(("for item in values:", "    use(item)", "    return"))
+    )
+    bundle = _pdf_bundle(body, mismatch, *listing, pages=(page,))
+
+    outcome = Fmt01BodyFontRule().run(
+        _pdf_context("FMT-01", bundle),
+        effective_rule("FMT-01", layer="class"),
+    )
+    evidence = tuple(item.description or "" for item in outcome.findings[0].evidence)
+    combined = " ".join(evidence)
+
+    assert all(len(item) <= 240 for item in evidence)
+    assert "body_chars=" in combined
+    assert "font_denominator=" in combined
+    assert "size_denominator=" in combined
+    assert "top_fonts=" in combined
+    assert "top_sizes=" in combined
+    assert "excluded=" in combined
+    assert "mismatch_pages=" in combined
+    assert "invalid_bbox=" in combined
+    assert "sha256:" in combined
 
 
 def test_fmt04_passes_with_expected_parindent(tmp_path: Path) -> None:
@@ -271,7 +660,12 @@ def test_fmt05_pdf_leg_flags_margin_overflow(tmp_path: Path) -> None:
 
 
 def test_fmt01_pdf_only_accepts_postscript_times_name() -> None:
-    bundle = _pdf_bundle(_span(font="TimesNewRomanPSMT"))
+    bundle = _pdf_bundle(
+        _span(
+            text="Synthetic body text with a sufficient deterministic sample.",
+            font="TimesNewRomanPSMT",
+        )
+    )
     outcome = Fmt01BodyFontRule().run(
         _pdf_context("FMT-01", bundle),
         effective_rule("FMT-01", layer="class"),

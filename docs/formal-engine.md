@@ -62,11 +62,14 @@ run directly against PyMuPDF `DocumentBundle` page/span geometry. They do not
 require a `LatexProject`:
 
 - FMT-01 strips six-letter PDF subset prefixes and checks an explicit allowlist
-  of Times-compatible aliases (`Times New Roman`, `TimesNewRomanPSMT`,
-  `Times-Roman`, and `Tempora-Regular`). It weights the font and size ratios by
-  significant characters, not span count. Repeated headers/footers, page
-  numbers, headings, formula fonts, monospaced listings, and identifiable
-  captions are excluded before measuring body text; an empty or geometrically
+  of Times-compatible families and their explicit regular/bold/italic aliases.
+  It weights the font and size ratios by significant characters, not span
+  count. Repeated headers/footers, page numbers, geometry-confirmed headings,
+  captions, numeric multi-row tables, contextual formula clusters, and
+  multi-line monospaced code blocks are excluded before measuring body text.
+  A font name alone never removes code or formula text: unconfirmed inline
+  monospace and Computer Modern spans remain in the denominator and are
+  reported as retained classifications. An empty, too small, or geometrically
   unreliable body sample is `unverifiable`, never PASS.
 - FMT-02 checks detected headings for bold typography.
 - FMT-03 estimates the line-spacing ratio from baselines.
@@ -79,8 +82,10 @@ require a `LatexProject`:
 
 FMT-01 and FMT-05 attach path-safe evidence with the rule id, relative PDF path,
 page, bbox, measured bounds/ratios, and a short classification diagnostic.
-They use the existing `Finding.evidence`, `path`, and `page` fields, so the
-published report schema remains unchanged.
+FMT-01 splits its bounded evidence into the ratio denominators, weighted top
+fonts/sizes, excluded and retained category counts, mismatch pages, and
+coordinate/hash samples. They use the existing `Finding.evidence`, `path`, and
+`page` fields, so the published report schema remains unchanged.
 
 FMT-04 remains `unverifiable` for PDF-only input because paragraph indentation
 cannot be established reliably from span geometry. A PDF without a text layer
