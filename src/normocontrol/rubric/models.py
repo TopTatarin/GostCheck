@@ -50,6 +50,7 @@ class ParameterName(StrEnum):
     FIG_NUMBERING = "fig_numbering"
     DEFENSE_YEAR = "defense_year"
     RECENT_SOURCES_SHARE = "recent_sources_share"
+    GEOMETRY_TOLERANCE_PT = "geometry_tolerance_pt"
 
 
 class RubricParameters(StrictModel):
@@ -59,6 +60,12 @@ class RubricParameters(StrictModel):
     fig_numbering: Literal["сквозная", "по разделам"]
     defense_year: int = Field(strict=True, ge=2000, le=2100)
     recent_sources_share: float = Field(strict=True, ge=0, le=1, allow_inf_nan=False)
+    geometry_tolerance_pt: float = Field(
+        strict=True,
+        ge=0,
+        le=1,
+        allow_inf_nan=False,
+    )
 
 
 class ParameterOverrides(StrictModel):
@@ -68,6 +75,13 @@ class ParameterOverrides(StrictModel):
     fig_numbering: Literal["сквозная", "по разделам"] | None = None
     defense_year: int | None = Field(default=None, strict=True, ge=2000, le=2100)
     recent_sources_share: float | None = Field(
+        default=None,
+        strict=True,
+        ge=0,
+        le=1,
+        allow_inf_nan=False,
+    )
+    geometry_tolerance_pt: float | None = Field(
         default=None,
         strict=True,
         ge=0,

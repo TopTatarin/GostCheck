@@ -78,10 +78,23 @@ require a `LatexProject`:
   footer zone and repeated marginalia are classified deterministically from
   geometry and cross-page repetition. The rest of the lower page is not
   ignored, so ordinary text or graphics outside any allowed boundary still
-  fail.
+  fail. The written policy decision approved for this implementation is option
+  B (task approval dated 2026-07-29): apply a configurable
+  `geometry_tolerance_pt` only to PDF-coordinate comparison. The rubric and
+  example config record the recommended approved value `0.5` pt; validation
+  requires a finite value from `0` through `1` pt. Equality at the configured
+  boundary is accepted with a deterministic floating-point comparison, while
+  `0.01` pt above it fails. This is not a title-frame exception: the same
+  tolerance applies to every measurable body, formula, table, image, and vector
+  bbox on every page. Unreliable or zero-area geometry remains unverifiable,
+  never PASS. Confirmed body overflow of about `1.7` pt in the Zoloev PDF and
+  the table/footer collision of about `2.6` pt on page 42 of the MISIS PDF
+  therefore remain blocking FMT-05 failures.
 
 FMT-01 and FMT-05 attach path-safe evidence with the rule id, relative PDF path,
 page, bbox, measured bounds/ratios, and a short classification diagnostic.
+FMT-05 also records the measured `delta_pt` and effective
+`geometry_tolerance_pt` for deterministic audit of the boundary decision.
 FMT-01 splits its bounded evidence into the ratio denominators, weighted top
 fonts/sizes, excluded and retained category counts, mismatch pages, and
 coordinate/hash samples. They use the existing `Finding.evidence`, `path`, and

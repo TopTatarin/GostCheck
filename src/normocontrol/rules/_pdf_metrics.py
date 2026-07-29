@@ -129,6 +129,7 @@ class MarginCheckResult:
     measured_pages: tuple[int, ...]
     invalid_bbox_count: int
     excluded_counts: tuple[tuple[str, int], ...]
+    max_observed: MarginViolation | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +157,7 @@ class LayoutMarginCheckResult:
 
     violations: tuple[LayoutMarginViolation, ...]
     excluded_counts: tuple[tuple[str, int], ...]
+    max_observed: LayoutMarginViolation | None
 
 
 def normalize_pdf_font_name(font: str | None) -> str:
@@ -834,15 +836,43 @@ def margin_bounds(page: PageInfo) -> tuple[float, float, float, float]:
     return left, right, top, bottom
 
 
-def bbox_within_margins(bbox: BoundingBox, page: PageInfo) -> bool:
-    """Return whether a bbox fits inside the allowed text area."""
+def bbox_margin_overflow(
+    bbox: BoundingBox,
+    page: PageInfo,
+) -> tuple[float, float, float, float]:
+    """Return left, right, top, and bottom overflow in PDF points."""
     left, right, top, bottom = margin_bounds(page)
-    return bbox.x0 >= left and bbox.x1 <= right and bbox.y0 >= top and bbox.y1 <= bottom
+    return (
+        max(0.0, left - bbox.x0),
+        max(0.0, bbox.x1 - right),
+        max(0.0, top - bbox.y0),
+        max(0.0, bbox.y1 - bottom),
+    )
+
+
+def bbox_within_margins(
+    bbox: BoundingBox,
+    page: PageInfo,
+    *,
+    geometry_tolerance_pt: float = 0.0,
+) -> bool:
+    """Return whether a bbox fits inside the bounds plus coordinate tolerance."""
+    if not math.isfinite(geometry_tolerance_pt) or geometry_tolerance_pt < 0:
+        raise ValueError("geometry_tolerance_pt must be finite and non-negative")
+    delta_pt = max(bbox_margin_overflow(bbox, page))
+    return delta_pt <= geometry_tolerance_pt or math.isclose(
+        delta_pt,
+        geometry_tolerance_pt,
+        rel_tol=0.0,
+        abs_tol=1e-9,
+    )
 
 
 def check_body_margins(
     spans: tuple[TextSpan, ...],
     pages: tuple[PageInfo, ...],
+    *,
+    geometry_tolerance_pt: float = 0.0,
 ) -> MarginCheckResult:
     """Measure non-marginal content without hiding the whole page footer zone."""
     page_by_number = {page.number: _metric_page(page) for page in pages}
@@ -851,6 +881,8 @@ def check_body_margins(
     content: list[TextSpan] = []
     violations: list[MarginViolation] = []
     invalid_bbox_count = 0
+    max_observed: MarginViolation | None = None
+    max_observed_delta = -1.0
 
     for index, span in enumerate(spans):
         chars = significant_character_count(span.text)
@@ -868,14 +900,21 @@ def check_body_margins(
             invalid_bbox_count += 1
             continue
         content.append(span)
-        if not bbox_within_margins(span.bbox, page):
-            violations.append(
-                MarginViolation(
-                    span=span,
-                    page=page,
-                    bounds=margin_bounds(page),
-                )
-            )
+        observation = MarginViolation(
+            span=span,
+            page=page,
+            bounds=margin_bounds(page),
+        )
+        observed_delta = max(bbox_margin_overflow(span.bbox, page))
+        if observed_delta > max_observed_delta:
+            max_observed = observation
+            max_observed_delta = observed_delta
+        if not bbox_within_margins(
+            span.bbox,
+            page,
+            geometry_tolerance_pt=geometry_tolerance_pt,
+        ):
+            violations.append(observation)
 
     return MarginCheckResult(
         content_spans=tuple(content),
@@ -883,6 +922,7 @@ def check_body_margins(
         measured_pages=tuple(sorted({span.page for span in content})),
         invalid_bbox_count=invalid_bbox_count,
         excluded_counts=tuple(sorted(excluded.items())),
+        max_observed=max_observed,
     )
 
 
@@ -950,6 +990,8 @@ def extract_pdf_layout_objects(pdf_path: Path | None) -> tuple[PdfLayoutObject, 
 def check_layout_object_margins(
     objects: tuple[PdfLayoutObject, ...],
     pages: tuple[PageInfo, ...],
+    *,
+    geometry_tolerance_pt: float = 0.0,
 ) -> LayoutMarginCheckResult:
     """Check image/vector bounds while excluding only repeated marginal objects."""
     page_by_number = {page.number: _metric_page(page) for page in pages}
@@ -972,22 +1014,33 @@ def check_layout_object_margins(
 
     excluded: Counter[str] = Counter()
     violations: list[LayoutMarginViolation] = []
+    max_observed: LayoutMarginViolation | None = None
+    max_observed_delta = -1.0
     for item in objects:
         if item in marginal:
             excluded[f"repeated_{item.kind}_marginalia"] += 1
             continue
         page = page_by_number.get(item.page)
-        if page is not None and not bbox_within_margins(item.bbox, page):
-            violations.append(
-                LayoutMarginViolation(
-                    item=item,
-                    page=page,
-                    bounds=margin_bounds(page),
-                )
+        if page is not None:
+            observation = LayoutMarginViolation(
+                item=item,
+                page=page,
+                bounds=margin_bounds(page),
             )
+            observed_delta = max(bbox_margin_overflow(item.bbox, page))
+            if observed_delta > max_observed_delta:
+                max_observed = observation
+                max_observed_delta = observed_delta
+            if not bbox_within_margins(
+                item.bbox,
+                page,
+                geometry_tolerance_pt=geometry_tolerance_pt,
+            ):
+                violations.append(observation)
     return LayoutMarginCheckResult(
         violations=tuple(violations),
         excluded_counts=tuple(sorted(excluded.items())),
+        max_observed=max_observed,
     )
 
 
