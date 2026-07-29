@@ -47,12 +47,13 @@
         "params_to_approve": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["font_size_pt", "fig_numbering", "defense_year", "recent_sources_share"],
+          "required": ["font_size_pt", "fig_numbering", "defense_year", "recent_sources_share", "geometry_tolerance_pt"],
           "properties": {
             "font_size_pt": {"type": "integer", "minimum": 8, "maximum": 72},
             "fig_numbering": {"enum": ["сквозная", "по разделам"]},
             "defense_year": {"type": "integer", "minimum": 2000, "maximum": 2100},
-            "recent_sources_share": {"type": "number", "minimum": 0, "maximum": 1}
+            "recent_sources_share": {"type": "number", "minimum": 0, "maximum": 1},
+            "geometry_tolerance_pt": {"type": "number", "minimum": 0, "maximum": 1}
           }
         }
       }

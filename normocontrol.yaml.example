@@ -8,11 +8,13 @@ approved_params:
   - fig_numbering
   - defense_year
   - recent_sources_share
+  - geometry_tolerance_pt
 params:
   font_size_pt: 14
   fig_numbering: "сквозная"
   defense_year: 2026
   recent_sources_share: 0.5
+  geometry_tolerance_pt: 0.5
 llm:
   # disabled | ollama | имя облачного провайдера
   provider: disabled

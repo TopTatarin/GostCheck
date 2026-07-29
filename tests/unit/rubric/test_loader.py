@@ -209,6 +209,41 @@ def test_config_include_merges_and_detects_cycle(tmp_path: Path) -> None:
         load_config(tmp_path / "a.yaml")
 
 
+@pytest.mark.parametrize(
+    "value",
+    [-0.01, 1.01, float("nan"), float("inf"), float("-inf")],
+)
+def test_geometry_tolerance_rejects_unsafe_values(tmp_path: Path, value: float) -> None:
+    config = config_payload()
+    config["params"] = {"geometry_tolerance_pt": value}
+
+    with pytest.raises(ConfigValidationError, match="geometry_tolerance_pt"):
+        load_config(write_yaml(tmp_path / "config.yaml", config))
+
+
+@pytest.mark.parametrize("value", [0.0, 0.5, 1.0])
+def test_geometry_tolerance_accepts_finite_bounded_values(
+    tmp_path: Path,
+    value: float,
+) -> None:
+    config = config_payload()
+    config["params"] = {"geometry_tolerance_pt": value}
+
+    assert (
+        load_config(write_yaml(tmp_path / "config.yaml", config)).params.geometry_tolerance_pt
+        == value
+    )
+
+
+def test_approved_geometry_tolerance_is_recorded_in_rubric_and_example_config() -> None:
+    rubric = load_rubric(RUBRIC_PATH)
+    config = load_config(CONFIG_PATH)
+
+    assert rubric.meta.params_to_approve.geometry_tolerance_pt == 0.5
+    assert config.params.geometry_tolerance_pt == 0.5
+    assert ParameterName.GEOMETRY_TOLERANCE_PT in config.approved_params
+
+
 def test_bib_03_standards_and_final_severity_overrides_are_preserved() -> None:
     payload = source_payload()
     bib = next(rule for rule in payload["rules"] if rule["id"] == "BIB-03")  # type: ignore[index]

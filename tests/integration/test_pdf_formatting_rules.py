@@ -172,6 +172,55 @@ def _graphic_overflow_pdf(path: Path, kind: str) -> Path:
     return _save_pdf(document, path)
 
 
+def _bounded_vector_pdf(path: Path, *, page_number: int, overflow_pt: float) -> Path:
+    document = fitz.open()
+    for index in range(page_number):
+        page = document.new_page(width=595, height=842)
+        page.insert_text(
+            (100, 120),
+            f"Synthetic body remains within margins on page {index + 1}.",
+            fontsize=14,
+            fontname="tiro",
+        )
+    left_bound = 30.0 * 72.0 / 25.4 - 2.0 * 72.0 / 25.4
+    document[page_number - 1].draw_rect(
+        fitz.Rect(left_bound - overflow_pt, 180, left_bound + 100, 260),
+        width=1,
+    )
+    return _save_pdf(document, path)
+
+
+def _long_table_footer_overflow_pdf(path: Path, *, overflow_pt: float) -> Path:
+    document = fitz.open()
+    page = document.new_page(width=595, height=842)
+    page.insert_text(
+        (100, 120),
+        "Synthetic body remains within margins.",
+        fontsize=14,
+        fontname="tiro",
+    )
+    bottom_bound = 842 - 20.0 * 72.0 / 25.4 + 2.0 * 72.0 / 25.4
+    page.draw_rect(
+        fitz.Rect(100, 650, 500, bottom_bound + overflow_pt),
+        width=1,
+    )
+    for y in (700, 750, bottom_bound + overflow_pt - 12):
+        page.draw_line((100, y), (500, y), width=1)
+    page.insert_text(
+        (110, bottom_bound - 4),
+        "Long table final row",
+        fontsize=10,
+        fontname="tiro",
+    )
+    page.insert_text(
+        (290, 824),
+        "42",
+        fontsize=10,
+        fontname="tiro",
+    )
+    return _save_pdf(document, path)
+
+
 def _effective_rubric():
     config = load_config(CONFIG_PATH)
     return expand_rubric(load_rubric(RUBRIC_PATH), config)
@@ -297,3 +346,62 @@ def test_synthetic_graphic_margin_violation_still_fails(
     assert fmt05.status is FindingStatus.FAIL
     assert fmt05.evidence
     assert f"classification={kind}" in (fmt05.evidence[0].description or "")
+
+
+@pytest.mark.parametrize("page_number", [1, 2], ids=["title-page", "ordinary-page"])
+def test_vector_with_coordinate_noise_within_geometry_tolerance_passes(
+    tmp_path: Path,
+    page_number: int,
+) -> None:
+    pdf_path = _bounded_vector_pdf(
+        tmp_path / f"frame-page-{page_number}.pdf",
+        page_number=page_number,
+        overflow_pt=0.3,
+    )
+
+    _, findings = _run_with_pdf(pdf_path)
+    fmt05 = next(item for item in findings if item.rule_id == "FMT-05")
+
+    assert fmt05.status is FindingStatus.PASS
+    assert fmt05.evidence
+    assert "geometry_tolerance_pt=0.50" in (fmt05.evidence[0].description or "")
+
+
+@pytest.mark.parametrize("overflow_pt", [0.51, 1.7, 2.6])
+def test_vector_above_geometry_tolerance_remains_formal_failure(
+    tmp_path: Path,
+    overflow_pt: float,
+) -> None:
+    pdf_path = _bounded_vector_pdf(
+        tmp_path / f"vector-overflow-{overflow_pt}.pdf",
+        page_number=1,
+        overflow_pt=overflow_pt,
+    )
+
+    _, findings = _run_with_pdf(pdf_path)
+    fmt05 = next(item for item in findings if item.rule_id == "FMT-05")
+
+    assert fmt05.status is FindingStatus.FAIL
+    assert fmt05.evidence
+    description = fmt05.evidence[0].description or ""
+    assert "delta_pt=" in description
+    assert "geometry_tolerance_pt=0.50" in description
+
+
+def test_long_table_overflow_near_footer_and_page_number_remains_failure(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _long_table_footer_overflow_pdf(
+        tmp_path / "long-table-footer-overflow.pdf",
+        overflow_pt=2.6,
+    )
+
+    _, findings = _run_with_pdf(pdf_path)
+    fmt05 = next(item for item in findings if item.rule_id == "FMT-05")
+
+    assert fmt05.status is FindingStatus.FAIL
+    assert fmt05.page == 1
+    assert fmt05.evidence
+    description = fmt05.evidence[0].description or ""
+    assert "delta_pt=2.60" in description
+    assert "geometry_tolerance_pt=0.50" in description

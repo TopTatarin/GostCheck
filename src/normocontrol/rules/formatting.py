@@ -11,13 +11,13 @@ from normocontrol.rules._class_text import class_file_text
 from normocontrol.rules._findings import make_rule_finding
 from normocontrol.rules._pdf_metrics import (
     MARGINS_MM,
+    bbox_margin_overflow,
     check_body_margins,
     check_layout_object_margins,
     example_pages,
     extract_pdf_layout_objects,
     font_size_match_ratio,
     heading_spans,
-    margin_bounds,
     median_line_spacing_ratio,
     page_text_bbox,
     select_body_spans,
@@ -42,6 +42,13 @@ def effective_font_size_pt(context: ExecutionContext) -> float:
     """Resolve approved font size from config with rubric defaults."""
     override = context.config.params.font_size_pt
     default = context.rubric.meta.params_to_approve.font_size_pt
+    return float(override if override is not None else default)
+
+
+def effective_geometry_tolerance_pt(context: ExecutionContext) -> float:
+    """Resolve approved PDF coordinate tolerance from config and rubric."""
+    override = context.config.params.geometry_tolerance_pt
+    default = context.rubric.meta.params_to_approve.geometry_tolerance_pt
     return float(override if override is not None else default)
 
 
@@ -544,10 +551,16 @@ class Fmt05MarginsRule:
         pdf_missing_message = "PDF text layer недоступен для проверки полей"
         pdf_bundle = context.pdf_metrics_bundle
         if pdf_bundle is not None and pdf_bundle.pages:
-            measurement = check_body_margins(pdf_bundle.spans, pdf_bundle.pages)
+            geometry_tolerance_pt = effective_geometry_tolerance_pt(context)
+            measurement = check_body_margins(
+                pdf_bundle.spans,
+                pdf_bundle.pages,
+                geometry_tolerance_pt=geometry_tolerance_pt,
+            )
             layout_measurement = check_layout_object_margins(
                 extract_pdf_layout_objects(context.pdf_path),
                 pdf_bundle.pages,
+                geometry_tolerance_pt=geometry_tolerance_pt,
             )
             if measurement.violations:
                 pdf_ok = False
@@ -555,18 +568,16 @@ class Fmt05MarginsRule:
                 pdf_page = violation.span.page
                 violation_bbox = violation.span.bbox
                 left, right, top, bottom = violation.bounds
-                overflow = (
-                    max(0.0, left - violation_bbox.x0),
-                    max(0.0, violation_bbox.x1 - right),
-                    max(0.0, top - violation_bbox.y0),
-                    max(0.0, violation_bbox.y1 - bottom),
-                )
+                overflow = bbox_margin_overflow(violation_bbox, violation.page)
+                delta_pt = max(overflow)
                 overflow_text = ",".join(f"{value:.1f}" for value in overflow)
                 description = (
                     f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
                     f"bbox=[{_bbox_value(violation_bbox)}]; "
                     f"bounds=[{left:.1f},{right:.1f},{top:.1f},{bottom:.1f}]; "
-                    f"overflow_pt=[{overflow_text}]; classification=body; "
+                    f"overflow_pt=[{overflow_text}]; delta_pt={delta_pt:.2f}; "
+                    f"geometry_tolerance_pt={geometry_tolerance_pt:.2f}; "
+                    "classification=body; "
                     "reason=not_repeated_header_footer_or_page_number"
                 )
                 pdf_evidence = _metric_evidence(
@@ -582,18 +593,15 @@ class Fmt05MarginsRule:
                 pdf_page = layout_violation.item.page
                 layout_bbox = layout_violation.item.bbox
                 left, right, top, bottom = layout_violation.bounds
-                overflow = (
-                    max(0.0, left - layout_bbox.x0),
-                    max(0.0, layout_bbox.x1 - right),
-                    max(0.0, top - layout_bbox.y0),
-                    max(0.0, layout_bbox.y1 - bottom),
-                )
+                overflow = bbox_margin_overflow(layout_bbox, layout_violation.page)
+                delta_pt = max(overflow)
                 overflow_text = ",".join(f"{value:.1f}" for value in overflow)
                 description = (
                     f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
                     f"bbox=[{_bbox_value(layout_bbox)}]; "
                     f"bounds=[{left:.1f},{right:.1f},{top:.1f},{bottom:.1f}]; "
-                    f"overflow_pt=[{overflow_text}]; "
+                    f"overflow_pt=[{overflow_text}]; delta_pt={delta_pt:.2f}; "
+                    f"geometry_tolerance_pt={geometry_tolerance_pt:.2f}; "
                     f"classification={layout_violation.item.kind}; "
                     "reason=not_repeated_header_footer"
                 )
@@ -632,21 +640,41 @@ class Fmt05MarginsRule:
                 )
             elif measurement.content_spans:
                 pdf_ok = True
-                pdf_page = measurement.measured_pages[0]
-                content_bbox = page_text_bbox(measurement.content_spans, pdf_page)
-                page = next(page for page in pdf_bundle.pages if page.number == pdf_page)
-                metric_page = (
-                    page.model_copy(
-                        update={
-                            "width": page.height,
-                            "height": page.width,
-                            "rotation": 0,
-                        }
+                body_observation = measurement.max_observed
+                layout_observation = layout_measurement.max_observed
+                body_delta = (
+                    max(
+                        bbox_margin_overflow(
+                            body_observation.span.bbox,
+                            body_observation.page,
+                        )
                     )
-                    if page.rotation in {90, 270}
-                    else page
+                    if body_observation is not None
+                    else -1.0
                 )
-                left, right, top, bottom = margin_bounds(metric_page)
+                layout_delta = (
+                    max(
+                        bbox_margin_overflow(
+                            layout_observation.item.bbox,
+                            layout_observation.page,
+                        )
+                    )
+                    if layout_observation is not None
+                    else -1.0
+                )
+                if layout_observation is not None and layout_delta > body_delta:
+                    pdf_page = layout_observation.item.page
+                    observed_bbox = layout_observation.item.bbox
+                    left, right, top, bottom = layout_observation.bounds
+                    delta_pt = layout_delta
+                    classification = layout_observation.item.kind
+                else:
+                    assert body_observation is not None
+                    pdf_page = body_observation.span.page
+                    observed_bbox = body_observation.span.bbox
+                    left, right, top, bottom = body_observation.bounds
+                    delta_pt = body_delta
+                    classification = "body"
                 excluded = (
                     ",".join(
                         f"{kind}:{count}"
@@ -659,8 +687,11 @@ class Fmt05MarginsRule:
                 )
                 description = (
                     f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
-                    f"bbox=[{_bbox_value(content_bbox)}]; "
+                    f"bbox=[{_bbox_value(observed_bbox)}]; "
                     f"bounds=[{left:.1f},{right:.1f},{top:.1f},{bottom:.1f}]; "
+                    f"delta_pt={delta_pt:.2f}; "
+                    f"geometry_tolerance_pt={geometry_tolerance_pt:.2f}; "
+                    f"classification={classification}; "
                     f"measured_pages={len(measurement.measured_pages)}; "
                     f"content_spans={len(measurement.content_spans)}; "
                     f"classified_marginalia={excluded}"
@@ -669,7 +700,7 @@ class Fmt05MarginsRule:
                     rule.id,
                     path=pdf_path,
                     page=pdf_page,
-                    bbox=content_bbox,
+                    bbox=observed_bbox,
                     description=description,
                 )
             else:
@@ -697,6 +728,7 @@ class Fmt05MarginsRule:
                     f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; "
                     f"page={pdf_page or 'unknown'}; bbox=[{_bbox_value(empty_bbox)}]; "
                     f"content_spans=0; classified_marginalia={excluded}; "
+                    f"geometry_tolerance_pt={geometry_tolerance_pt:.2f}; "
                     "diagnostic=no_reliable_body_region"
                 )
                 pdf_evidence = _metric_evidence(

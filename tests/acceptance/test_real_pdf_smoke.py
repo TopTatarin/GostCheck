@@ -26,17 +26,20 @@ pytestmark = pytest.mark.acceptance
 
 
 @pytest.mark.parametrize(
-    ("env_name", "profile"),
+    ("env_name", "profile", "fmt05_status", "fmt05_page", "delta_range"),
     (
-        ("GOSTCHECK_ACCEPTANCE_SOFTWARE_PDF", "software"),
-        ("GOSTCHECK_ACCEPTANCE_RESEARCH_PDF", "research"),
-        ("GOSTCHECK_ACCEPTANCE_MISIS_PDF", "software"),
+        ("GOSTCHECK_ACCEPTANCE_SOFTWARE_PDF", "software", "pass", 1, (0.0, 0.5)),
+        ("GOSTCHECK_ACCEPTANCE_RESEARCH_PDF", "research", "fail", 39, (1.7, 1.8)),
+        ("GOSTCHECK_ACCEPTANCE_MISIS_PDF", "software", "fail", 42, (2.5, 2.7)),
     ),
 )
 def test_real_pdf_report_separates_every_finding(
     tmp_path: Path,
     env_name: str,
     profile: str,
+    fmt05_status: str,
+    fmt05_page: int,
+    delta_range: tuple[float, float],
 ) -> None:
     configured_path = os.environ.get(env_name)
     if not configured_path:
@@ -117,3 +120,26 @@ def test_real_pdf_report_separates_every_finding(
     assert "mismatch_pages=" in evidence_text
     assert "invalid_bbox=" in evidence_text
     assert "[TRUNCATED]" not in evidence_text
+
+    fmt05_runs = [
+        next(
+            finding
+            for stage in report["stages"]
+            if stage["name"] == "formal"
+            for finding in stage["findings"]
+            if finding["rule_id"] == "FMT-05"
+        )
+        for report in reports
+    ]
+    assert fmt05_runs[0] == fmt05_runs[1]
+    assert fmt05_runs[0]["status"] == fmt05_status
+    assert fmt05_runs[0]["page"] == fmt05_page
+    fmt05_evidence = " ".join(
+        item.get("description") or "" for item in fmt05_runs[0].get("evidence", [])
+    )
+    assert "bbox=[" in fmt05_evidence
+    assert "bounds=[" in fmt05_evidence
+    assert "geometry_tolerance_pt=0.50" in fmt05_evidence
+    delta_match = re.search(r"delta_pt=(\d+(?:\.\d+)?)", fmt05_evidence)
+    assert delta_match is not None
+    assert delta_range[0] <= float(delta_match.group(1)) <= delta_range[1]

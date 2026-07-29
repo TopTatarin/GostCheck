@@ -18,8 +18,10 @@ from normocontrol.extract.base import (
     sha256_text,
 )
 from normocontrol.rules._pdf_metrics import (
+    bbox_within_margins,
     font_size_match_ratio,
     is_times_new_roman,
+    margin_bounds,
     select_body_spans,
     significant_character_count,
     span_is_bold,
@@ -657,6 +659,110 @@ def test_fmt05_pdf_leg_flags_margin_overflow(tmp_path: Path) -> None:
     rule = effective_rule("FMT-05", layer="class")
     outcome = Fmt05MarginsRule().run(context, rule)
     assert outcome.findings[0].status is FindingStatus.FAIL
+
+
+@pytest.mark.parametrize(
+    ("delta_pt", "expected"),
+    [
+        (0.0, True),
+        (0.3, True),
+        (0.5, True),
+        (0.51, False),
+        (1.7, False),
+        (2.6, False),
+    ],
+)
+def test_fmt05_geometry_tolerance_boundary_is_deterministic(
+    delta_pt: float,
+    expected: bool,
+) -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    left, _, top, _ = margin_bounds(page)
+    bbox = BoundingBox(
+        x0=left - delta_pt,
+        y0=top + 10.0,
+        x1=left + 100.0,
+        y1=top + 24.0,
+    )
+
+    assert bbox_within_margins(bbox, page, geometry_tolerance_pt=0.5) is expected
+
+
+def test_fmt05_geometry_tolerance_handles_float_rounding_at_boundary() -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    left, _, top, _ = margin_bounds(page)
+    bbox = BoundingBox(
+        x0=left - (0.1 + 0.2),
+        y0=top + 10.0,
+        x1=left + 100.0,
+        y1=top + 24.0,
+    )
+
+    assert bbox_within_margins(bbox, page, geometry_tolerance_pt=0.3)
+
+
+@pytest.mark.parametrize(
+    ("label", "delta_pt"),
+    [
+        ("ordinary text", 1.7),
+        ("formula E = mc^2", 1.7),
+    ],
+)
+def test_fmt05_body_and_formula_above_tolerance_keep_formal_failure(
+    label: str,
+    delta_pt: float,
+) -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    left, _, top, _ = margin_bounds(page)
+    bundle = _pdf_bundle(
+        _span(
+            text=label,
+            x0=left - delta_pt,
+            y0=top + 20.0,
+            x1=left + 100.0,
+            y1=top + 34.0,
+        ),
+        pages=(page,),
+    )
+
+    finding = (
+        Fmt05MarginsRule()
+        .run(
+            _pdf_context("FMT-05", bundle),
+            effective_rule("FMT-05", layer="class"),
+        )
+        .findings[0]
+    )
+
+    assert finding.status is FindingStatus.FAIL
+    assert finding.evidence
+    description = finding.evidence[0].description or ""
+    assert "delta_pt=1.70" in description
+    assert "geometry_tolerance_pt=0.50" in description
+
+
+def test_fmt05_zero_delta_pass_evidence_is_auditable() -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    bundle = _pdf_bundle(
+        _span(text="Ordinary body text", x0=100.0, y0=120.0),
+        pages=(page,),
+    )
+
+    finding = (
+        Fmt05MarginsRule()
+        .run(
+            _pdf_context("FMT-05", bundle),
+            effective_rule("FMT-05", layer="class"),
+        )
+        .findings[0]
+    )
+
+    assert finding.status is FindingStatus.PASS
+    assert finding.evidence
+    description = finding.evidence[0].description or ""
+    assert "delta_pt=0.00" in description
+    assert "bbox=[" in description
+    assert "bounds=[" in description
 
 
 def test_fmt01_pdf_only_accepts_postscript_times_name() -> None:
