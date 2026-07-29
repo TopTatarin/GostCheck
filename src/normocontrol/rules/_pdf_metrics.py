@@ -9,6 +9,7 @@ import unicodedata
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
@@ -29,21 +30,46 @@ TIMES_COMPATIBLE_ALIASES: frozenset[str] = frozenset(
     {
         "Times New Roman",
         "TimesNewRomanPSMT",
+        "TimesNewRomanPS-BoldMT",
+        "TimesNewRomanPS-ItalicMT",
+        "TimesNewRomanPS-BoldItalicMT",
         "Times-Roman",
+        "Times-Bold",
+        "Times-Italic",
+        "Times-BoldItalic",
         "Tempora-Regular",
+        "Tempora-Bold",
+        "Tempora-Italic",
+        "Tempora-BoldItalic",
     }
 )
 
 _SUBSET_PREFIX_RE = re.compile(r"^[A-Z]{6}\+")
 _PAGE_NUMBER_RE = re.compile(r"^(?:\d+|[ivxlcdm]+)$", re.IGNORECASE)
 _MONOSPACED_FONT_RE = re.compile(
-    r"courier|consolas|monaco|menlo|mono|typewriter|inconsolata|dejavu\s*sans\s*mono",
+    r"courier|consolas|monaco|menlo|mono|typewriter|inconsolata|"
+    r"dejavu\s*sans\s*mono|sftt|cmtt",
     re.IGNORECASE,
 )
 _MATH_FONT_RE = re.compile(
     r"symbol|math|cmmi|cmsy|cmex|msam|msbm|stmary|esint|euler|rsfs|wasy",
     re.IGNORECASE,
 )
+_COMPUTER_MODERN_ROMAN_RE = re.compile(r"(?:^|[^a-z])cmr\d|computer\s*modern", re.IGNORECASE)
+_CODE_CONTEXT_RE = re.compile(
+    r"(?:"
+    r"//|/\*|\*/|::|->|=>|:=|"
+    r"\b(?:class|def|return|import|from|if|else|elif|for|while|try|except|"
+    r"function|const|let|var|public|private|protected|void|int|string|bool|"
+    r"select|insert|update|delete|where|begin|end)\b|"
+    r"\b[A-Za-z_]\w*\s*\(|"
+    r"\b[A-Za-z_]\w*\s*=\s*[^=]"
+    r")",
+    re.IGNORECASE,
+)
+_CODE_PUNCTUATION = frozenset("{}[]();=<>:+*/#")
+_MATH_OPERATOR_RE = re.compile(r"[=±×÷∑∫√∞≤≥≠≈→←∂∆∇+\-*/^]")
+_MATH_TOKEN_RE = re.compile(r"^[\d\s.,()[\]{}=±×÷∑∫√∞≤≥≠≈→←∂∆∇+\-*/^_|]+$")
 _CAPTION_RE = re.compile(
     r"^\s*(?:рис(?:унок|\.)?|таблица|figure|fig\.?|table)\s*[\dA-ZА-ЯIVX]*",
     re.IGNORECASE,
@@ -58,6 +84,31 @@ class BodySpanSelection:
     significant_chars: int
     invalid_bbox_count: int
     excluded_chars: tuple[tuple[str, int], ...]
+    retained_chars: tuple[tuple[str, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _VisualLine:
+    """Canonical geometry-based line used only for conservative classification."""
+
+    page: int
+    items: tuple[tuple[int, TextSpan], ...]
+
+    @property
+    def y0(self) -> float:
+        return min(span.bbox.y0 for _, span in self.items)
+
+    @property
+    def y1(self) -> float:
+        return max(span.bbox.y1 for _, span in self.items)
+
+    @property
+    def x0(self) -> float:
+        return min(span.bbox.x0 for _, span in self.items)
+
+    @property
+    def x1(self) -> float:
+        return max(span.bbox.x1 for _, span in self.items)
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,14 +304,246 @@ def classify_marginal_spans(
     return classified
 
 
-def _font_is_code_or_math(font: str | None) -> str | None:
-    if not font:
-        return None
-    if _MONOSPACED_FONT_RE.search(font):
-        return "code"
-    if _MATH_FONT_RE.search(font):
-        return "formula"
-    return None
+def _span_is_monospace(span: TextSpan) -> bool:
+    """Use PDF metadata or an explicit family hint, never a family hint alone."""
+    return bool(
+        (span.flags is not None and span.flags & 8)
+        or (span.font and _MONOSPACED_FONT_RE.search(span.font))
+    )
+
+
+def _font_is_math_specific(font: str | None) -> bool:
+    return bool(font and _MATH_FONT_RE.search(font))
+
+
+def _font_is_computer_modern_roman(font: str | None) -> bool:
+    return bool(font and _COMPUTER_MODERN_ROMAN_RE.search(font))
+
+
+def _canonical_span_key(item: tuple[int, TextSpan]) -> tuple[object, ...]:
+    _, span = item
+    return (
+        span.page,
+        span.bbox.y0,
+        span.bbox.x0,
+        span.bbox.y1,
+        span.bbox.x1,
+        span.font or "",
+        span.font_size or 0.0,
+        span.text,
+    )
+
+
+def _same_visual_line(left: TextSpan, right: TextSpan) -> bool:
+    overlap = min(left.bbox.y1, right.bbox.y1) - max(left.bbox.y0, right.bbox.y0)
+    minimum_height = min(
+        left.bbox.y1 - left.bbox.y0,
+        right.bbox.y1 - right.bbox.y0,
+    )
+    if overlap >= minimum_height * 0.35:
+        return True
+    left_center = (left.bbox.y0 + left.bbox.y1) / 2.0
+    right_center = (right.bbox.y0 + right.bbox.y1) / 2.0
+    nominal_size = max(left.font_size or 0.0, right.font_size or 0.0, 8.0)
+    return abs(left_center - right_center) <= nominal_size * 0.45
+
+
+def _visual_lines(items: Iterable[tuple[int, TextSpan]]) -> tuple[_VisualLine, ...]:
+    by_page: dict[int, list[tuple[int, TextSpan]]] = defaultdict(list)
+    for item in sorted(items, key=_canonical_span_key):
+        by_page[item[1].page].append(item)
+
+    lines: list[_VisualLine] = []
+    for page in sorted(by_page):
+        page_lines: list[list[tuple[int, TextSpan]]] = []
+        for item in by_page[page]:
+            matching = next(
+                (
+                    line
+                    for line in reversed(page_lines)
+                    if any(_same_visual_line(item[1], existing[1]) for existing in line)
+                ),
+                None,
+            )
+            if matching is None:
+                page_lines.append([item])
+            else:
+                matching.append(item)
+        lines.extend(
+            _VisualLine(
+                page=page,
+                items=tuple(sorted(line, key=_canonical_span_key)),
+            )
+            for line in page_lines
+        )
+    return tuple(sorted(lines, key=lambda line: (line.page, line.y0, line.x0)))
+
+
+def _line_text(line: _VisualLine) -> str:
+    parts: list[str] = []
+    previous: TextSpan | None = None
+    for _, span in line.items:
+        if previous is not None:
+            gap = span.bbox.x0 - previous.bbox.x1
+            if gap > max(span.font_size or 0.0, previous.font_size or 0.0, 8.0) * 0.5:
+                parts.append(" ")
+        parts.append(span.text)
+        previous = span
+    return "".join(parts)
+
+
+def _line_chars(line: _VisualLine) -> int:
+    return sum(significant_character_count(span.text) for _, span in line.items)
+
+
+def _line_dominant_font(line: _VisualLine) -> str:
+    weights: Counter[str] = Counter()
+    for _, span in line.items:
+        weights[normalize_pdf_font_name(span.font)] += significant_character_count(span.text)
+    if not weights:
+        return ""
+    return min(weights, key=lambda font: (-weights[font], font))
+
+
+def _line_monospace_ratio(line: _VisualLine) -> float:
+    total = _line_chars(line)
+    if not total:
+        return 0.0
+    mono = sum(
+        significant_character_count(span.text) for _, span in line.items if _span_is_monospace(span)
+    )
+    return mono / total
+
+
+def _line_bold_ratio(line: _VisualLine) -> float:
+    total = _line_chars(line)
+    if not total:
+        return 0.0
+    bold = sum(
+        significant_character_count(span.text) for _, span in line.items if span_is_bold(span)
+    )
+    return bold / total
+
+
+def _code_context_score(text: str) -> int:
+    matches = len(_CODE_CONTEXT_RE.findall(text))
+    punctuation = sum(char in _CODE_PUNCTUATION for char in text)
+    return matches + int(punctuation >= 2) + int(punctuation >= 5)
+
+
+def _lines_are_adjacent(left: _VisualLine, right: _VisualLine) -> bool:
+    if left.page != right.page:
+        return False
+    nominal_height = max(left.y1 - left.y0, right.y1 - right.y0, 8.0)
+    vertical_gap = right.y0 - left.y1
+    return -nominal_height * 0.25 <= vertical_gap <= nominal_height * 1.5
+
+
+def _listing_indexes(lines: tuple[_VisualLine, ...]) -> set[int]:
+    candidates: list[_VisualLine] = []
+    for line in lines:
+        has_monospace_metadata = _line_monospace_ratio(line) >= 0.8
+        if _line_chars(line) and has_monospace_metadata:
+            candidates.append(line)
+
+    runs: list[list[_VisualLine]] = []
+    for line in candidates:
+        if (
+            runs
+            and _lines_are_adjacent(runs[-1][-1], line)
+            and abs(runs[-1][0].x0 - line.x0) <= 36.0
+            and _line_dominant_font(runs[-1][0]) == _line_dominant_font(line)
+        ):
+            runs[-1].append(line)
+        else:
+            runs.append([line])
+
+    classified: set[int] = set()
+    for run in runs:
+        code_score = sum(_code_context_score(_line_text(line)) for line in run)
+        chars = sum(_line_chars(line) for line in run)
+        if len(run) < 3 or code_score < 2 or chars < 12:
+            continue
+        classified.update(index for line in run for index, _ in line.items)
+    return classified
+
+
+def _line_cell_starts(line: _VisualLine) -> tuple[float, ...]:
+    starts: list[float] = []
+    previous: TextSpan | None = None
+    for _, span in line.items:
+        if significant_character_count(span.text) < 1:
+            continue
+        if previous is None:
+            starts.append(span.bbox.x0)
+        else:
+            nominal_size = max(previous.font_size or 0.0, span.font_size or 0.0, 8.0)
+            if span.bbox.x0 - previous.bbox.x1 > nominal_size * 1.5:
+                starts.append(span.bbox.x0)
+        previous = span
+    return tuple(starts)
+
+
+def _cell_starts_align(left: tuple[float, ...], right: tuple[float, ...]) -> bool:
+    matches = sum(any(abs(value - candidate) <= 12.0 for candidate in right) for value in left)
+    return matches >= 2
+
+
+def _table_indexes(lines: tuple[_VisualLine, ...]) -> set[int]:
+    candidates = [(line, _line_cell_starts(line)) for line in lines]
+    candidates = [(line, starts) for line, starts in candidates if len(starts) >= 2]
+    runs: list[list[tuple[_VisualLine, tuple[float, ...]]]] = []
+    for candidate in candidates:
+        line, starts = candidate
+        if (
+            runs
+            and _lines_are_adjacent(runs[-1][-1][0], line)
+            and _cell_starts_align(runs[-1][-1][1], starts)
+        ):
+            runs[-1].append(candidate)
+        else:
+            runs.append([candidate])
+
+    classified: set[int] = set()
+    for run in runs:
+        numeric_rows = sum(any(char.isdigit() for char in _line_text(line)) for line, _ in run)
+        monospace_rows = sum(_line_monospace_ratio(line) >= 0.8 for line, _ in run)
+        if len(run) < 3 or numeric_rows < 2 or monospace_rows >= len(run) * 0.5:
+            continue
+        classified.update(index for line, _ in run for index, _ in line.items)
+    return classified
+
+
+def _formula_indexes(lines: tuple[_VisualLine, ...]) -> set[int]:
+    classified: set[int] = set()
+    for line in lines:
+        math_specific = [
+            (index, span) for index, span in line.items if _font_is_math_specific(span.font)
+        ]
+        generic_cm = [
+            (index, span) for index, span in line.items if _font_is_computer_modern_roman(span.font)
+        ]
+        text = _line_text(line)
+        operators = len(_MATH_OPERATOR_RE.findall(text))
+        math_tokens = [
+            (index, span)
+            for index, span in line.items
+            if _MATH_TOKEN_RE.fullmatch(span.text.strip()) is not None
+        ]
+        has_specific_context = bool(math_specific) and (len(math_specific) >= 2 or operators >= 1)
+        has_generic_display_context = (
+            not math_specific
+            and len(generic_cm) >= 2
+            and operators >= 1
+            and sum(significant_character_count(span.text) for _, span in math_tokens)
+            >= _line_chars(line) * 0.6
+        )
+        if not has_specific_context and not has_generic_display_context:
+            continue
+        classified.update(index for index, _ in math_specific)
+        classified.update(index for index, _ in generic_cm)
+        classified.update(index for index, _ in math_tokens)
+    return classified
 
 
 def _dominant_font_size(spans: Iterable[TextSpan]) -> float | None:
@@ -281,8 +564,9 @@ def select_body_spans(
 ) -> BodySpanSelection:
     """Separate reliable body text from headings, code, formulae and marginalia."""
     marginal = classify_marginal_spans(spans, pages)
-    candidates: list[TextSpan] = []
+    candidates: list[tuple[int, TextSpan]] = []
     excluded: Counter[str] = Counter()
+    retained: Counter[str] = Counter()
     invalid_bbox_count = 0
 
     for index, span in enumerate(spans):
@@ -298,38 +582,79 @@ def select_body_spans(
         if marginal_kind is not None:
             excluded[marginal_kind] += chars
             continue
-        content_kind = _font_is_code_or_math(span.font)
-        if content_kind is not None:
-            excluded[content_kind] += chars
-            continue
-        candidates.append(span)
+        candidates.append((index, span))
 
-    body_size = _dominant_font_size(candidates)
-    selected: list[TextSpan] = []
-    for span in candidates:
-        chars = significant_character_count(span.text)
-        size = span.font_size or 0.0
-        if body_size is not None and size > body_size + 0.75 and chars <= 160:
-            excluded["heading"] += chars
-            continue
-        if span_is_bold(span) and chars <= 160:
-            excluded["heading"] += chars
-            continue
+    lines = _visual_lines(candidates)
+    body_size = _dominant_font_size(span for _, span in candidates)
+    classified: dict[int, str] = {}
+
+    for line in lines:
+        line_text = _line_text(line)
+        if _CAPTION_RE.match(line_text) is not None and _line_chars(line) <= 240:
+            for index, _ in line.items:
+                classified[index] = "caption"
+
+    for index in _table_indexes(lines):
+        classified.setdefault(index, "table")
+    for index in _listing_indexes(lines):
+        classified.setdefault(index, "listing")
+    for index in _formula_indexes(lines):
+        classified.setdefault(index, "formula")
+
+    for line_index, line in enumerate(lines):
+        line_sizes = [
+            span.font_size or 0.0
+            for _, span in line.items
+            if significant_character_count(span.text)
+        ]
+        previous = lines[line_index - 1] if line_index > 0 else None
+        following = lines[line_index + 1] if line_index + 1 < len(lines) else None
+        previous_distance = (
+            line.y0 - previous.y0 if previous is not None and previous.page == line.page else None
+        )
+        following_distance = (
+            following.y0 - line.y0
+            if following is not None and following.page == line.page
+            else None
+        )
+        isolated_bold_line = (
+            body_size is not None
+            and _line_bold_ratio(line) >= 0.8
+            and any(
+                distance is not None and distance > body_size * 2.0
+                for distance in (previous_distance, following_distance)
+            )
+        )
         if (
             body_size is not None
-            and size < body_size - 0.75
-            and _CAPTION_RE.match(span.text) is not None
+            and line_sizes
+            and _line_chars(line) <= 160
+            and (statistics.median(line_sizes) > body_size + 0.75 or isolated_bold_line)
         ):
-            excluded["caption"] += chars
-            continue
-        selected.append(span)
+            for index, _ in line.items:
+                classified.setdefault(index, "heading")
 
-    significant_chars = sum(significant_character_count(span.text) for span in selected)
+    selected: list[tuple[int, TextSpan]] = []
+    for index, span in candidates:
+        chars = significant_character_count(span.text)
+        category = classified.get(index)
+        if category is not None:
+            excluded[category] += chars
+            continue
+        selected.append((index, span))
+        if _span_is_monospace(span):
+            retained["inline_code"] += chars
+        if _font_is_math_specific(span.font) or _font_is_computer_modern_roman(span.font):
+            retained["unconfirmed_math"] += chars
+
+    ordered_selected = tuple(span for _, span in sorted(selected, key=_canonical_span_key))
+    significant_chars = sum(significant_character_count(span.text) for span in ordered_selected)
     return BodySpanSelection(
-        spans=tuple(selected),
+        spans=ordered_selected,
         significant_chars=significant_chars,
         invalid_bbox_count=invalid_bbox_count,
         excluded_chars=tuple(sorted(excluded.items())),
+        retained_chars=tuple(sorted(retained.items())),
     )
 
 
@@ -398,6 +723,75 @@ def top_fonts(
     for span in spans:
         weights[display_pdf_font_name(span.font)] += significant_character_count(span.text)
     return tuple(sorted(weights.items(), key=lambda item: (-item[1], item[0].casefold())))[:limit]
+
+
+def top_font_sizes(
+    spans: Iterable[TextSpan],
+    *,
+    limit: int = 3,
+) -> tuple[tuple[float, int], ...]:
+    """Return font sizes ranked by significant-character weight."""
+    weights: Counter[float] = Counter()
+    for span in spans:
+        if span.font_size is None or span.font_size <= 0:
+            continue
+        weights[round(span.font_size, 1)] += significant_character_count(span.text)
+    return tuple(sorted(weights.items(), key=lambda item: (-item[1], item[0])))[:limit]
+
+
+def typography_mismatch_pages(
+    spans: Iterable[TextSpan],
+    *,
+    expected_pt: float,
+    tolerance_pt: float = 0.5,
+    limit: int = 3,
+) -> tuple[tuple[int, int], ...]:
+    """Rank pages by characters that miss either the font or size requirement."""
+    weights: Counter[int] = Counter()
+    for span in spans:
+        size_matches = (
+            span.font_size is not None and abs(span.font_size - expected_pt) <= tolerance_pt
+        )
+        if not is_times_new_roman(span.font) or not size_matches:
+            weights[span.page] += significant_character_count(span.text)
+    return tuple(sorted(weights.items(), key=lambda item: (-item[1], item[0])))[:limit]
+
+
+def typography_mismatch_samples(
+    spans: Iterable[TextSpan],
+    *,
+    expected_pt: float,
+    tolerance_pt: float = 0.5,
+    limit: int = 3,
+) -> tuple[tuple[int, BoundingBox, str], ...]:
+    """Return deterministic coordinate/hash samples without thesis fragments."""
+    mismatches: list[TextSpan] = []
+    for span in spans:
+        size_matches = (
+            span.font_size is not None and abs(span.font_size - expected_pt) <= tolerance_pt
+        )
+        if not is_times_new_roman(span.font) or not size_matches:
+            mismatches.append(span)
+    ranked = sorted(
+        mismatches,
+        key=lambda span: (
+            span.page,
+            span.bbox.y0,
+            span.bbox.x0,
+            span.bbox.y1,
+            span.bbox.x1,
+            span.font or "",
+            span.text,
+        ),
+    )
+    return tuple(
+        (
+            span.page,
+            span.bbox,
+            sha256(span.text.encode("utf-8")).hexdigest()[:12],
+        )
+        for span in ranked[:limit]
+    )
 
 
 def example_pages(

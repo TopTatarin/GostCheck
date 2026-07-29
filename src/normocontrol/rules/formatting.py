@@ -23,13 +23,17 @@ from normocontrol.rules._pdf_metrics import (
     select_body_spans,
     span_is_bold,
     times_new_roman_ratio,
+    top_font_sizes,
     top_fonts,
+    typography_mismatch_pages,
+    typography_mismatch_samples,
 )
 from normocontrol.rules.base import RuleRunOutcome
 from normocontrol.rules.context import ExecutionContext, SourceKind
 
 _FONT_SIZE_TOLERANCE_PT = 0.5
 _BODY_FONT_RATIO_MIN = 0.95
+_BODY_TEXT_MIN_CHARS = 20
 _LINE_SPACING_TARGET = 1.5
 _LINE_SPACING_TOLERANCE = 0.10
 
@@ -144,6 +148,25 @@ def _metric_evidence(
     return (Evidence(locator=locator, description=description),)
 
 
+def _fmt01_evidence(
+    rule_id: str,
+    *,
+    path: str | None,
+    page: int | None,
+    bbox: BoundingBox | None,
+    descriptions: tuple[tuple[str, str], ...],
+) -> tuple[Evidence, ...]:
+    safe_path = path or "<pdf>"
+    base = (
+        f"{rule_id}|{safe_path}|page={page if page is not None else 'unknown'}|"
+        f"bbox={_bbox_value(bbox)}"
+    )
+    return tuple(
+        Evidence(locator=f"{base}|kind={kind}", description=description)
+        for kind, description in descriptions
+    )
+
+
 def _first_span_on_page(spans: tuple[TextSpan, ...], page: int | None) -> TextSpan | None:
     if page is None:
         return spans[0] if spans else None
@@ -228,7 +251,7 @@ class Fmt01BodyFontRule:
             selection = select_body_spans(pdf_bundle.spans, pdf_bundle.pages)
             spans = selection.spans
             invalid_chars = dict(selection.excluded_chars).get("invalid_bbox", 0)
-            if spans and selection.significant_chars >= 2:
+            if spans and selection.significant_chars >= 1:
                 expected = effective_font_size_pt(context)
                 tnr_ratio = times_new_roman_ratio(spans)
                 size_ratio = font_size_match_ratio(
@@ -236,11 +259,33 @@ class Fmt01BodyFontRule:
                     expected_pt=expected,
                     tolerance_pt=_FONT_SIZE_TOLERANCE_PT,
                 )
-                pages = example_pages(spans)
-                pdf_page = pages[0] if pages else spans[0].page
+                mismatch_pages = typography_mismatch_pages(
+                    spans,
+                    expected_pt=expected,
+                    tolerance_pt=_FONT_SIZE_TOLERANCE_PT,
+                )
+                measured_pages = example_pages(spans)
+                pdf_page = (
+                    mismatch_pages[0][0]
+                    if mismatch_pages
+                    else (measured_pages[0] if measured_pages else spans[0].page)
+                )
                 bbox = page_text_bbox(spans, pdf_page)
-                fonts = ", ".join(f"{name[:40]}:{count}" for name, count in top_fonts(spans))
-                page_examples = ",".join(str(page) for page in pages)
+                fonts = ",".join(f"{name[:32]}:{count}" for name, count in top_fonts(spans))
+                sizes = ",".join(f"{size:.1f}:{count}" for size, count in top_font_sizes(spans))
+                excluded = ",".join(f"{kind}:{count}" for kind, count in selection.excluded_chars)
+                retained = ",".join(f"{kind}:{count}" for kind, count in selection.retained_chars)
+                mismatch_page_text = ",".join(f"{page}:{count}" for page, count in mismatch_pages)
+                samples = typography_mismatch_samples(
+                    spans,
+                    expected_pt=expected,
+                    tolerance_pt=_FONT_SIZE_TOLERANCE_PT,
+                    limit=2,
+                )
+                sample_text = ",".join(
+                    f"p{page}@{_bbox_value(sample_bbox)}#sha256:{digest}"
+                    for page, sample_bbox, digest in samples
+                )
                 total_with_invalid = selection.significant_chars + invalid_chars
                 max_tnr_ratio = (
                     tnr_ratio * selection.significant_chars + invalid_chars
@@ -253,60 +298,99 @@ class Fmt01BodyFontRule:
                 )
                 if proven_failure:
                     pdf_ok = False
+                    diagnostic = "proven_failure"
                 elif selection.invalid_bbox_count:
                     pdf_missing_message = (
                         "геометрия части body-spans ненадёжна; FMT-01 нельзя подтвердить"
                     )
+                    diagnostic = "invalid_body_geometry"
+                elif selection.significant_chars < _BODY_TEXT_MIN_CHARS:
+                    pdf_missing_message = (
+                        "недостаточно надёжного body text для подтверждения FMT-01"
+                    )
+                    diagnostic = "insufficient_body_text"
                 else:
                     pdf_ok = (
                         tnr_ratio >= _BODY_FONT_RATIO_MIN and size_ratio >= _BODY_FONT_RATIO_MIN
                     )
-                description = (
-                    f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; page={pdf_page}; "
-                    f"bbox=[{_bbox_value(bbox)}]; font_ratio={tnr_ratio:.4f}; "
-                    f"size_ratio={size_ratio:.4f}; expected_pt={expected:.1f}; "
-                    f"body_chars={selection.significant_chars}; top_fonts={fonts}; "
-                    f"pages={page_examples}; invalid_bbox={selection.invalid_bbox_count}"
+                    diagnostic = "measured"
+                descriptions: tuple[tuple[str, str], ...] = (
+                    (
+                        "summary",
+                        f"rule_id={rule.id}; body_chars={selection.significant_chars}; "
+                        f"font_ratio={tnr_ratio:.4f}; "
+                        f"font_denominator={selection.significant_chars}; "
+                        f"size_ratio={size_ratio:.4f}; "
+                        f"size_denominator={selection.significant_chars}; "
+                        f"expected_pt={expected:.1f}; threshold={_BODY_FONT_RATIO_MIN:.4f}; "
+                        f"invalid_bbox={selection.invalid_bbox_count}; "
+                        f"diagnostic={diagnostic}",
+                    ),
+                    (
+                        "distribution",
+                        f"top_fonts={fonts or 'none'}; top_sizes={sizes or 'none'}",
+                    ),
+                    (
+                        "classification",
+                        f"excluded={excluded or 'none'}; retained={retained or 'none'}",
+                    ),
+                    (
+                        "mismatch_pages",
+                        f"mismatch_pages={mismatch_page_text or 'none'}",
+                    ),
+                    (
+                        "samples",
+                        f"mismatch_samples={sample_text or 'none'}",
+                    ),
                 )
-                pdf_evidence = _metric_evidence(
+                pdf_evidence = _fmt01_evidence(
                     rule.id,
                     path=pdf_path,
                     page=pdf_page,
                     bbox=bbox,
-                    description=description,
+                    descriptions=descriptions,
                 )
             else:
                 diagnostic_span = _first_span_on_page(pdf_bundle.spans, None)
                 pdf_page = diagnostic_span.page if diagnostic_span is not None else None
                 diagnostic_bbox = diagnostic_span.bbox if diagnostic_span is not None else None
                 pdf_missing_message = "надёжные body-spans не найдены; проверка FMT-01 неполна"
-                description = (
-                    f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; "
-                    f"page={pdf_page or 'unknown'}; "
-                    f"bbox=[{_bbox_value(diagnostic_bbox)}]; body_chars=0; "
-                    f"invalid_bbox={selection.invalid_bbox_count}; "
-                    "diagnostic=no_reliable_body_spans"
+                excluded = ",".join(f"{kind}:{count}" for kind, count in selection.excluded_chars)
+                retained = ",".join(f"{kind}:{count}" for kind, count in selection.retained_chars)
+                descriptions = (
+                    (
+                        "summary",
+                        f"rule_id={rule.id}; body_chars=0; font_denominator=0; "
+                        f"size_denominator=0; invalid_bbox={selection.invalid_bbox_count}; "
+                        "diagnostic=no_reliable_body_spans",
+                    ),
+                    (
+                        "classification",
+                        f"excluded={excluded or 'none'}; retained={retained or 'none'}",
+                    ),
                 )
-                pdf_evidence = _metric_evidence(
+                pdf_evidence = _fmt01_evidence(
                     rule.id,
                     path=pdf_path,
                     page=pdf_page,
                     bbox=diagnostic_bbox,
-                    description=description,
+                    descriptions=descriptions,
                 )
         elif pdf_bundle is not None:
             pdf_page = pdf_bundle.pages[0].number if pdf_bundle.pages else None
-            description = (
-                f"rule_id={rule.id}; path={pdf_path or '<pdf>'}; "
-                f"page={pdf_page or 'unknown'}; bbox=[unavailable]; body_chars=0; "
-                "diagnostic=pdf_text_layer_unavailable"
-            )
-            pdf_evidence = _metric_evidence(
+            pdf_evidence = _fmt01_evidence(
                 rule.id,
                 path=pdf_path,
                 page=pdf_page,
                 bbox=None,
-                description=description,
+                descriptions=(
+                    (
+                        "summary",
+                        f"rule_id={rule.id}; body_chars=0; font_denominator=0; "
+                        "size_denominator=0; invalid_bbox=0; "
+                        "diagnostic=pdf_text_layer_unavailable",
+                    ),
+                ),
             )
         return _combine_class_pdf(
             context,

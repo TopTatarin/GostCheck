@@ -104,6 +104,39 @@ def _wrong_font_pdf(path: Path) -> Path:
     return _save_pdf(document, path)
 
 
+def _fmt01_mixed_context_pdf(path: Path) -> Path:
+    document = fitz.open()
+    page = document.new_page(width=595, height=842)
+    page.insert_text((100, 80), "Synthetic heading", fontsize=18, fontname="hebo")
+    for index in range(8):
+        page.insert_text(
+            (100, 120 + index * 21),
+            f"Ordinary Times body line {index} with sufficient synthetic content.",
+            fontsize=14,
+            fontname="tiro",
+        )
+    page.insert_text((100, 300), "Use ", fontsize=14, fontname="tiro")
+    page.insert_text((126, 300), "token", fontsize=14, fontname="cour")
+    page.insert_text(
+        (168, 300),
+        " in an ordinary inline-code sentence.",
+        fontsize=14,
+        fontname="tiro",
+    )
+    page.insert_text((100, 340), "Table 1 - Synthetic metrics", fontsize=10, fontname="tiro")
+    for row, (label, value) in enumerate(
+        (("Metric", "Value"), ("Alpha", "10"), ("Beta", "20")),
+    ):
+        y = 365 + row * 15
+        page.insert_text((100, y), label, fontsize=10, fontname="tiro")
+        page.insert_text((300, y), value, fontsize=10, fontname="tiro")
+    for index, text in enumerate(
+        ("for item in values:", "    print(item)", "    return item"),
+    ):
+        page.insert_text((110, 430 + index * 15), text, fontsize=10, fontname="cour")
+    return _save_pdf(document, path)
+
+
 def _non_bold_heading_pdf(path: Path) -> Path:
     document = fitz.open()
     page = document.new_page(width=595, height=842)
@@ -211,6 +244,26 @@ def test_tempora_body_headings_and_repeated_footer_pass_pdf_metrics(
     assert fmt01.evidence and fmt05.evidence
     assert "font_ratio=1.0000" in (fmt01.evidence[0].description or "")
     assert "repeated_footer" in (fmt05.evidence[0].description or "")
+
+
+def test_fmt01_mixed_pdf_context_has_explainable_classification(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _fmt01_mixed_context_pdf(tmp_path / "fmt01-mixed-context.pdf")
+
+    _, findings = _run_with_pdf(pdf_path)
+    fmt01 = next(item for item in findings if item.rule_id == "FMT-01")
+    evidence = " ".join(item.description or "" for item in fmt01.evidence)
+
+    assert fmt01.status is FindingStatus.PASS
+    assert "excluded=" in evidence
+    assert "caption:" in evidence
+    assert "heading:" in evidence
+    assert "listing:" in evidence
+    assert "table:" in evidence
+    assert "retained=inline_code:" in evidence
+    assert "top_sizes=" in evidence
+    assert "mismatch_pages=" in evidence
 
 
 def test_synthetic_body_margin_violation_has_geometric_evidence(
