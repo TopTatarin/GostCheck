@@ -163,6 +163,7 @@ def test_pdf_metric_helpers() -> None:
         "TeX Gyre Termes Italic",
         "TeXGyreTermes-BoldItalic",
         "ABCDEF+LiberationSerif-Regular",
+        "LiberationSerif",
         "Liberation Serif Bold",
         "LiberationSerif-Italic",
         "LiberationSerif-BoldItalic",
