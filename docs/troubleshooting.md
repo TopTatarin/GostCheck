@@ -138,6 +138,19 @@ current checkout. Relative paths inside the checkout remain directly usable.
 Pass a relative `--out` under the checkout if a fully navigable console path is
 needed; do not disable redaction or print environment/provider payloads.
 
+## Windows CLI fails while printing a Unicode path
+
+**Symptom:** a completed `normocontrol run` used to end with
+`UnicodeEncodeError` under `PYTHONIOENCODING=cp1251:strict`, especially for an
+NFD filename, emoji, combining mark, or box-drawing character.
+**Action:** Use the current CLI. It normalizes display paths to NFC and renders
+characters unavailable in the console encoding as `\uNNNN` or
+`\UNNNNNNNN`. This affects console display only: the source filename is not
+renamed, privacy-safe path shortening remains active, report JSON stays UTF-8,
+and the process preserves the run's documented exit code (`0`, `2`, `3`, or
+`4`). If an older installation still returns `1`, upgrade it and rerun the same
+command; a previously written `report.json` can be inspected as UTF-8.
+
 ## Formal per-rule metric has zero denominators
 
 **Symptom:** `evaluate_formal_fixtures.py` prints

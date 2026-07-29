@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from unicodedata import normalize
 
 import fitz
 import pytest
@@ -216,6 +218,29 @@ def _run_pdf_subprocess(
     )
 
 
+def _run_cp1251_subprocess(
+    *args: str,
+    path_prefix: Path | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join((str(ROOT / "src"), str(ROOT)))
+    env["PYTHONIOENCODING"] = "cp1251:strict"
+    if path_prefix is not None:
+        env["PATH"] = os.pathsep.join((str(path_prefix), env["PATH"]))
+    return subprocess.run(
+        [sys.executable, "-m", "normocontrol.cli", *args],
+        cwd=ROOT,
+        env=env,
+        text=False,
+        capture_output=True,
+        check=False,
+    )
+
+
+def _decode_cp1251(output: bytes) -> str:
+    return output.decode("cp1251")
+
+
 def test_pdf_only_subprocess_returns_real_zero_and_two_codes(tmp_path: Path) -> None:
     passed = _run_pdf_subprocess(
         ROOT / "tests" / "fixtures" / "pdf" / "fmt_pass.pdf",
@@ -337,6 +362,151 @@ def test_run_supports_cyrillic_paths_with_spaces_and_existing_report_dir(
     assert "Проверка шрифта.pdf" in second.stdout
     assert "…/Каталог отчёта/report.md" in second.stdout
     assert "gate: PASS" in second.stdout
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "ВКР_Золоева.pdf",
+        "ВКР_Золое\u0308ва.pdf",
+        "ВКР_а\u0301.pdf",
+        "ВКР_📄.pdf",
+        "ВКР_╨.pdf",
+        "ВКР_╨╨╨.pdf",
+    ],
+)
+def test_run_cp1251_subprocess_preserves_unicode_filename_and_exit_zero(
+    tmp_path: Path,
+    filename: str,
+) -> None:
+    source = tmp_path / filename
+    source.write_bytes((ROOT / "tests" / "fixtures" / "pdf" / "fmt_pass.pdf").read_bytes())
+    out = tmp_path / f"report-{len(filename)}"
+
+    result = _run_cp1251_subprocess(
+        "--no-llm",
+        "run",
+        str(source),
+        "--config",
+        str(CONFIG),
+        "--rubric",
+        str(RUBRIC),
+        "--out",
+        str(out),
+        "--only",
+        "FMT-01",
+    )
+
+    stdout = _decode_cp1251(result.stdout)
+    stderr = _decode_cp1251(result.stderr)
+    expected_display = (
+        normalize("NFC", filename).encode("cp1251", errors="backslashreplace").decode("cp1251")
+    )
+    assert result.returncode == int(ExitCode.SUCCESS), stdout + stderr
+    assert f"input: …/{expected_display}" in stdout
+    assert source.is_file()
+    assert source.name == filename
+    assert "Traceback" not in stdout
+    assert "sk-" not in stdout + stderr
+    assert "Synthetic PDF fixture" not in stdout + stderr
+    assert str(tmp_path.resolve()) not in stdout + stderr
+    published = json.loads((out / "report.json").read_text(encoding="utf-8"))
+    validate_published_report(published, schema=load_report_schema())
+    assert published["exit_code"] == int(ExitCode.SUCCESS)
+
+
+def test_run_cp1251_subprocess_preserves_written_formal_exit_two(tmp_path: Path) -> None:
+    source = tmp_path / "ВКР_╨╨_📄.pdf"
+    source.write_bytes((ROOT / "tests" / "fixtures" / "pdf" / "fmt_wrong_font.pdf").read_bytes())
+    out = tmp_path / "formal-fail"
+
+    result = _run_cp1251_subprocess(
+        "--no-llm",
+        "run",
+        str(source),
+        "--config",
+        str(CONFIG),
+        "--rubric",
+        str(RUBRIC),
+        "--out",
+        str(out),
+        "--only",
+        "FMT-01",
+    )
+
+    stdout = _decode_cp1251(result.stdout)
+    stderr = _decode_cp1251(result.stderr)
+    assert result.returncode == int(ExitCode.FORMAL_FAILURE), stdout + stderr
+    assert "Traceback" not in stdout
+    assert "exit_code: 2 (formal gate failed)" in stdout
+    published = json.loads((out / "report.json").read_text(encoding="utf-8"))
+    validate_published_report(published, schema=load_report_schema())
+    assert published["exit_code"] == int(ExitCode.FORMAL_FAILURE)
+
+
+def test_run_cp1251_subprocess_configuration_error_stays_three(tmp_path: Path) -> None:
+    missing = tmp_path / "нет_╨_📄.pdf"
+    result = _run_cp1251_subprocess(
+        "--no-llm",
+        "run",
+        str(missing),
+        "--config",
+        str(CONFIG),
+        "--rubric",
+        str(RUBRIC),
+        "--out",
+        str(tmp_path / "config-error"),
+        "--only",
+        "FMT-01",
+    )
+
+    stdout = _decode_cp1251(result.stdout)
+    stderr = _decode_cp1251(result.stderr)
+    assert result.returncode == int(ExitCode.CONFIG_ERROR), stdout + stderr
+    assert "Traceback" not in stdout
+    assert str(tmp_path.resolve()) not in stdout + stderr
+
+
+def test_run_cp1251_subprocess_fail_closed_stays_four(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    if os.name == "nt":
+        fake_latexmk = bin_dir / "latexmk.exe"
+        shutil.copy2(sys.executable, fake_latexmk)
+    else:
+        fake_latexmk = bin_dir / "latexmk"
+        fake_latexmk.write_text("#!/bin/sh\nexit 1\n", encoding="ascii")
+        fake_latexmk.chmod(0o755)
+    source_dir = tmp_path / "сломанная_╨_📄"
+    source_dir.mkdir()
+    (source_dir / "main.tex").write_text(
+        "\\documentclass{definitely-missing-synthetic-class}\n"
+        "\\begin{document}\n"
+        "synthetic\n"
+        "\\end{document}\n",
+        encoding="utf-8",
+    )
+    result = _run_cp1251_subprocess(
+        "--no-llm",
+        "run",
+        str(source_dir),
+        "--config",
+        str(CONFIG),
+        "--rubric",
+        str(RUBRIC),
+        "--out",
+        str(tmp_path / "internal-error"),
+        "--only",
+        "build",
+        "--fail-closed",
+        path_prefix=bin_dir,
+    )
+
+    stdout = _decode_cp1251(result.stdout)
+    stderr = _decode_cp1251(result.stderr)
+    assert result.returncode == int(ExitCode.INTERNAL_ERROR), stdout + stderr
+    assert "Traceback" not in stdout
+    assert str(tmp_path.resolve()) not in stdout + stderr
 
 
 @pytest.mark.parametrize("kind", ["corrupt", "encrypted"])

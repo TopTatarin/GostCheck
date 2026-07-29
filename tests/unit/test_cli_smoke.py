@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ import normocontrol.cli as cli
 from normocontrol.domain import ExitCode, RunReport
 from normocontrol.errors import ConfigurationError
 from normocontrol.logging import RedactingFormatter, SecretRedactionFilter, redact_text
+from normocontrol.reporting.console import console_safe_text
 
 runner = CliRunner()
 
@@ -96,10 +98,36 @@ def test_doctor_renders_on_cp1251_terminal() -> None:
     buffer = io.BytesIO()
     stream = io.TextIOWrapper(buffer, encoding="cp1251", errors="strict")
 
-    cli.render_doctor((cli.DoctorCheck("Python 3.12", True, "готов"),), stream)
+    cli.render_doctor((cli.DoctorCheck("Python 3.12", True, "готов 📄 ╨╨"),), stream)
     stream.flush()
 
-    assert "готов" in buffer.getvalue().decode("cp1251")
+    output = buffer.getvalue().decode("cp1251")
+    assert "готов" in output
+    assert "\\U0001f4c4" in output
+    assert "\\u2568\\u2568" in output
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("ВКР_Золоева.pdf", "ВКР_Золоева.pdf"),
+        ("ВКР_Золое\u0308ва.pdf", "ВКР_Золоёва.pdf"),
+        ("ВКР_а\u0301.pdf", "ВКР_а\\u0301.pdf"),
+        ("ВКР_📄.pdf", "ВКР_\\U0001f4c4.pdf"),
+        ("ВКР_╨.pdf", "ВКР_\\u2568.pdf"),
+        ("ВКР_╨╨╨.pdf", "ВКР_\\u2568\\u2568\\u2568.pdf"),
+    ],
+)
+def test_console_safe_text_normalizes_nfc_and_escapes_for_cp1251(
+    value: str,
+    expected: str,
+) -> None:
+    stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1251", errors="strict")
+
+    result = console_safe_text(value, stream)
+
+    assert result == expected
+    assert unicodedata.is_normalized("NFC", result)
 
 
 def test_emit_report_uses_stdout_or_utf8_path_with_spaces_and_nfd(
