@@ -17,6 +17,7 @@ from normocontrol.rules.section_floats import section_float_rules
 from normocontrol.rules.structure import structure_rules
 from normocontrol.rules.system import system_rules
 from normocontrol.rules.tables import tables_rules
+from normocontrol.rules.task_items import task_item_rules
 from normocontrol.tools.chktex import ChktexRunner
 from normocontrol.tools.latexmk import LatexBuildService
 
@@ -36,6 +37,7 @@ def register_d02_rules(
         *appendix_rules(),
         *algorithm_rules(),
         *section_float_rules(),
+        *task_item_rules(),
     )
     for rule in rules:
         registry.register(rule)

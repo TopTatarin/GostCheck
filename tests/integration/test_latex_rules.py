@@ -295,6 +295,42 @@ def test_section_float_rules_use_only_their_target_sections(tmp_path: Path) -> N
     assert all(finding.status is FindingStatus.PASS for finding in findings)
 
 
+def test_tsk02_measures_only_task_list_items(tmp_path: Path) -> None:
+    main_tex = tmp_path / "main.tex"
+    main_tex.write_text(
+        (
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\section{Цель и задачи}\n"
+            "\\begin{enumerate}\n"
+            "\\item Формализовать проверяемые требования к документу.\n"
+            "\\item Реализовать воспроизводимую проверку свидетельств.\n"
+            "\\end{enumerate}\n"
+            "\\end{document}\n"
+        ),
+        encoding="utf-8",
+    )
+    config = load_config(CONFIG_PATH)
+    effective = _effective_rubric()
+    rubric = effective.model_copy(
+        update={"rules": tuple(rule for rule in effective.rules if rule.id == "TSK-02")}
+    )
+    context = ExecutionContext(
+        rubric=rubric,
+        config=config,
+        bundle=LatexExtractor(tmp_path).extract(main_tex),
+        latex=LatexProject(root=tmp_path, main_tex=main_tex),
+        pdf_path=None,
+        bib_paths=(),
+    )
+
+    finding = FormalEngine(default_formal_registry()).run(context).findings[0]
+
+    assert finding.rule_id == "TSK-02"
+    assert finding.status is FindingStatus.PASS
+    assert finding.evidence
+
+
 def test_sys03_unverifiable_when_latexmk_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("shutil.which", lambda _name: None)
     _, findings = _run_fixture("pass", build_service=LatexBuildService())
