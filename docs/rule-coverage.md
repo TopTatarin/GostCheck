@@ -1,9 +1,9 @@
 # Rubric rule coverage
 
 This matrix is the machine-checked coverage inventory for the 64 rules in
-`rubric.yaml`. `pending_decision` is deliberately not PASS: no rule is classified
-as `manual_required` or `excluded_scope` until a responsible norm-control reviewer
-records a written decision.
+`rubric.yaml`: 61 `implemented` and 3 `manual_required`, with no
+`pending_decision` left. `manual_required` is deliberately not PASS — it is
+coverage metadata, not a verification result for any document.
 
 | rule_id | layer | implementation | test | status | rationale |
 | --- | --- | --- | --- | --- | --- |
@@ -61,21 +61,25 @@ records a written decision.
 | MTH-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | MTH-03 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | ALG-01 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped figure/algorithm presence plus advisory suitability. |
-| ALG-02 | vision | — | — | pending_decision | Vision/manual scope needs a signed reviewer decision. |
+| ALG-02 | manual | none (no automated check) | coverage matrix metadata test | manual_required | Text sufficiency inside flowchart blocks needs human visual review; decided in docs/rule-decisions/ALG-02-IMP-02-DEP-01.md. |
 | ALG-03 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped «Блок N.» regex plus advisory completeness. |
 | IMP-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
-| IMP-02 | vision | — | — | pending_decision | Vision/manual scope needs a signed reviewer decision. |
+| IMP-02 | manual | none (no automated check) | coverage matrix metadata test | manual_required | Screenshot content classification needs human visual judgement; decided in docs/rule-decisions/ALG-02-IMP-02-DEP-01.md. |
 | RES-01 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped table/figure presence plus advisory result checklist. |
 | CON-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | APP-01 | script | formal | formal suite | implemented | Deterministic Git repository URL check limited to appendix sections. |
 | GEN-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | GEN-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
-| DEP-01 | script | — | — | pending_decision | Implementation requires approved oral-norm scope. |
+| DEP-01 | manual | none (no automated check) | coverage matrix metadata test | manual_required | First-person usage and its exceptions need an editorial reviewer decision; decided in docs/rule-decisions/ALG-02-IMP-02-DEP-01.md. |
 
-## Decisions required
+## Manual-only rules
 
-No written reviewer decisions are present for `ALG-02` or `IMP-02`; therefore they
-remain `pending_decision`, not `manual_required` or `excluded_scope`. `DEP-01`
-requires written approval of the oral norm before implementation. No written
-decision is invented for any of these three remaining rules, and none is counted
-as PASS.
+`ALG-02`, `IMP-02` and `DEP-01` are `manual_required` by the written decision in
+[docs/rule-decisions/ALG-02-IMP-02-DEP-01.md](rule-decisions/ALG-02-IMP-02-DEP-01.md).
+They are checked by a norm-control reviewer outside GostCheck, which runs no
+formal, semantic, vision, OCR or heuristic check for them.
+
+`manual_required` is not `excluded_scope` and is not counted as implemented. The
+absence of an automatic finding for these rules is not a PASS, and they never
+affect the formal gate, `severity_final` or the exit code. GostCheck neither
+collects nor stores the outcome of that manual review.
