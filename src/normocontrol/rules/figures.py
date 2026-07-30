@@ -139,8 +139,9 @@ class Fig03FigureReferenceStyleRule:
         cls_text = class_file_text(context)
         reader = _reader(context)
         class_ok = (
-            cls_text is not None
-            and re.search(
+            None
+            if cls_text is None
+            else re.search(
                 r"\\(?:newcommand|NewDocumentCommand)\{\\risref\}",
                 cls_text,
             )

@@ -109,7 +109,7 @@ class Bib02NumericCitationStyleRule:
 
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
         cls_text = class_file_text(context)
-        class_ok = cls_text is not None and _class_has_gost_numeric(cls_text)
+        class_ok = None if cls_text is None else _class_has_gost_numeric(cls_text)
         reader = _reader(context)
         manual = manual_bracket_citations(reader.snapshot.body)
         script_ok = not manual
@@ -135,7 +135,7 @@ class Bib03GostBibliographyRule:
 
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
         cls_text = class_file_text(context)
-        class_ok = cls_text is not None and _class_has_gost_numeric(cls_text)
+        class_ok = None if cls_text is None else _class_has_gost_numeric(cls_text)
         entries = _bib_entries(context)
         if not entries:
             return combine_class_script(

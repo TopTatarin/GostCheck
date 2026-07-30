@@ -9,6 +9,7 @@ from normocontrol.rules.bib_parser import parse_bib_text
 from normocontrol.rules.bibliography import (
     Bib01IntextReferencesRule,
     Bib02NumericCitationStyleRule,
+    Bib03GostBibliographyRule,
     Bib04OnlineUrldateRule,
 )
 from normocontrol.rules.cite_symbols import cite_keys, manual_bracket_citations
@@ -52,6 +53,126 @@ def test_bib02_fails_on_manual_bracket_reference(tmp_path: Path) -> None:
     assert outcome.findings[0].status is FindingStatus.FAIL
 
 
+def test_bib02_unverifiable_when_protected_config_missing(tmp_path: Path) -> None:
+    """No protected-files.yaml -> class_ok must be None, not False (regression)."""
+    project = _project(tmp_path, body="\\cite{demo}\n", include_protected=False)
+    context = _bib_context(project, tmp_path / "refs.bib", SAMPLE_BIB)
+    rule = effective_rule("BIB-02", layer="class+script")
+    outcome = Bib02NumericCitationStyleRule().run(context, rule)
+    finding = outcome.findings[0]
+    assert finding.status is FindingStatus.UNVERIFIABLE
+    assert "класс не задаёт" not in finding.message
+
+
+def test_bib02_untrusted_cls_with_correct_settings_stays_unverifiable(tmp_path: Path) -> None:
+    """An unconfigured .cls file must never be treated as a trusted source."""
+    project = _project(
+        tmp_path,
+        body="\\cite{demo}\n",
+        cls="\\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex-gost}\n",
+        include_protected=False,
+    )
+    context = _bib_context(project, tmp_path / "refs.bib", SAMPLE_BIB)
+    rule = effective_rule("BIB-02", layer="class+script")
+    outcome = Bib02NumericCitationStyleRule().run(context, rule)
+    assert outcome.findings[0].status is FindingStatus.UNVERIFIABLE
+
+
+def test_bib02_untrusted_cls_without_setting_stays_unverifiable(tmp_path: Path) -> None:
+    """An untrusted .cls missing the setting must not become a proven FAIL."""
+    project = _project(
+        tmp_path,
+        body="\\cite{demo}\n",
+        cls="\\LoadClass{article}\n",
+        include_protected=False,
+    )
+    context = _bib_context(project, tmp_path / "refs.bib", SAMPLE_BIB)
+    rule = effective_rule("BIB-02", layer="class+script")
+    outcome = Bib02NumericCitationStyleRule().run(context, rule)
+    assert outcome.findings[0].status is FindingStatus.UNVERIFIABLE
+
+
+def test_bib02_fails_when_trusted_class_missing_setting(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path,
+        body="\\cite{demo}\n",
+        cls="\\LoadClass{article}\n",
+        include_protected=True,
+    )
+    context = _bib_context(project, tmp_path / "refs.bib", SAMPLE_BIB)
+    rule = effective_rule("BIB-02", layer="class+script")
+    outcome = Bib02NumericCitationStyleRule().run(context, rule)
+    finding = outcome.findings[0]
+    assert finding.status is FindingStatus.FAIL
+    assert finding.message == "класс не задаёт biblatex-gost style=gost-numeric, sorting=none"
+
+
+def test_bib02_script_fail_preserved_when_class_missing(tmp_path: Path) -> None:
+    project = _project(tmp_path, body="Обзор [1].\n", include_protected=False)
+    context = _bib_context(project, tmp_path / "refs.bib", SAMPLE_BIB)
+    rule = effective_rule("BIB-02", layer="class+script")
+    outcome = Bib02NumericCitationStyleRule().run(context, rule)
+    finding = outcome.findings[0]
+    assert finding.status is FindingStatus.FAIL
+    assert "[1]" in finding.message
+
+
+def test_bib02_passes_with_trusted_class_and_clean_script(tmp_path: Path) -> None:
+    project = _project(tmp_path, body="\\cite{demo}\n", include_protected=True)
+    context = _bib_context(project, tmp_path / "refs.bib", SAMPLE_BIB)
+    rule = effective_rule("BIB-02", layer="class+script")
+    outcome = Bib02NumericCitationStyleRule().run(context, rule)
+    assert outcome.findings[0].status is FindingStatus.PASS
+
+
+def test_bib03_unverifiable_when_protected_config_missing(tmp_path: Path) -> None:
+    """No protected-files.yaml with valid .bib entries -> UNVERIFIABLE (regression)."""
+    project = _project(tmp_path, body="\\cite{demo}\n", include_protected=False)
+    bib = "@article{demo, author={A}, title={T}, year={2024}}\n"
+    context = _bib_context(project, tmp_path / "refs.bib", bib)
+    rule = effective_rule("BIB-03", layer="class+script")
+    outcome = Bib03GostBibliographyRule().run(context, rule)
+    finding = outcome.findings[0]
+    assert finding.status is FindingStatus.UNVERIFIABLE
+    assert "класс не задаёт" not in finding.message
+
+
+def test_bib03_script_fail_preserved_when_class_missing(tmp_path: Path) -> None:
+    project = _project(tmp_path, body="\\cite{demo}\n", include_protected=False)
+    bib = "@article{demo, author={A}}\n"
+    context = _bib_context(project, tmp_path / "refs.bib", bib)
+    rule = effective_rule("BIB-03", layer="class+script")
+    outcome = Bib03GostBibliographyRule().run(context, rule)
+    finding = outcome.findings[0]
+    assert finding.status is FindingStatus.FAIL
+    assert "demo" in finding.message
+
+
+def test_bib03_fails_when_trusted_class_missing_setting(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path,
+        body="\\cite{demo}\n",
+        cls="\\LoadClass{article}\n",
+        include_protected=True,
+    )
+    bib = "@article{demo, author={A}, title={T}, year={2024}}\n"
+    context = _bib_context(project, tmp_path / "refs.bib", bib)
+    rule = effective_rule("BIB-03", layer="class+script")
+    outcome = Bib03GostBibliographyRule().run(context, rule)
+    finding = outcome.findings[0]
+    assert finding.status is FindingStatus.FAIL
+    assert finding.message == "класс не задаёт ГОСТ-совместимый biblatex-gost"
+
+
+def test_bib03_passes_with_trusted_class_and_valid_entries(tmp_path: Path) -> None:
+    project = _project(tmp_path, body="\\cite{demo}\n", include_protected=True)
+    bib = "@article{demo, author={A}, title={T}, year={2024}}\n"
+    context = _bib_context(project, tmp_path / "refs.bib", bib)
+    rule = effective_rule("BIB-03", layer="class+script")
+    outcome = Bib03GostBibliographyRule().run(context, rule)
+    assert outcome.findings[0].status is FindingStatus.PASS
+
+
 def test_bib04_requires_urldate_for_online(tmp_path: Path) -> None:
     project = _project(tmp_path, body="\\cite{demo}\n")
     bib = "@article{demo, author={A}, title={T}, year={2024}, url={https://example.org},}\n"
@@ -69,16 +190,18 @@ def _project(
     *,
     body: str,
     cls: str = "\\RequirePackage[backend=biber,style=gost-numeric,sorting=none]{biblatex-gost}\n",
+    include_protected: bool = True,
 ) -> LatexProject:
     root = tmp_path / "project"
     root.mkdir()
     (root / "gostcheck-vkr.cls").write_text(cls, encoding="utf-8")
-    (root / "protected-files.yaml").write_text(
-        "version: 1\nclass_files:\n  - path: gostcheck-vkr.cls\n    sha256: "
-        + "a" * 64
-        + "\nallowed_renewcommand: []\n",
-        encoding="utf-8",
-    )
+    if include_protected:
+        (root / "protected-files.yaml").write_text(
+            "version: 1\nclass_files:\n  - path: gostcheck-vkr.cls\n    sha256: "
+            + "a" * 64
+            + "\nallowed_renewcommand: []\n",
+            encoding="utf-8",
+        )
     (root / "main.tex").write_text(
         f"\\documentclass{{gostcheck-vkr}}\n\\begin{{document}}\n{body}\\end{{document}}\n",
         encoding="utf-8",
