@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-from normocontrol.domain import ExitCode
+from normocontrol.domain import ExitCode, GateMode
 from normocontrol.errors import ConfigurationError
 
 STAGE_NAMES = frozenset({"build", "formal", "semantic", "aggregate"})
@@ -96,6 +96,8 @@ class RunRequest:
     tool_version: str = "0.1.0"
     base_url: str | None = None
     model: str | None = None
+    #: ``None`` means "not requested on the CLI"; the configuration value applies.
+    gate_mode: GateMode | None = None
 
 
 @dataclass(slots=True)

@@ -15,6 +15,7 @@
 - Rubric: `n/a`
 - Model: `disabled`
 - Commit: `abc1234`
+- Gate mode: `strict`
 - Degraded: `False`
 - Approvals required: `False`
 - Exit code: `2`

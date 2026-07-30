@@ -31,6 +31,7 @@ from normocontrol.domain import (
     ExitCode,
     Finding,
     FindingStatus,
+    GateMode,
     RuleLayer,
     RunReport,
     Severity,
@@ -92,6 +93,8 @@ class Orchestrator:
     def __init__(self, hooks: OrchestratorHooks | None = None) -> None:
         self._hooks = hooks or OrchestratorHooks()
         self._canceled = False
+        # CLI wins over configuration; resolved once the config is loaded.
+        self._gate_mode = GateMode.STRICT
 
     def run(self, request: RunRequest) -> RunReport:
         """Run the pipeline and always attempt to leave diagnosable artifacts."""
@@ -109,6 +112,7 @@ class Orchestrator:
             source = submission.source
             project_root = submission.root
             config, rubric = self._load_config_and_rubric(request)
+            self._gate_mode = request.gate_mode or config.gate_mode
             if request.apply_final_severity:
                 rubric = apply_final_severity(rubric)
 
@@ -230,6 +234,7 @@ class Orchestrator:
                 report = RunReport(
                     tool_version=request.tool_version,
                     exit_code=exit_code,
+                    gate_mode=self._gate_mode,
                     stages=tuple(stages),
                 )
                 all_findings = tuple(finding for stage in stages for finding in stage.findings)
@@ -252,6 +257,7 @@ class Orchestrator:
                         ),
                         artifact_name=None,
                         repo_root=None,
+                        gate_mode=self._gate_mode,
                     ),
                     clock=self._hooks.report_clock,
                 )
@@ -266,6 +272,7 @@ class Orchestrator:
                 report = RunReport(
                     tool_version=request.tool_version,
                     exit_code=exit_code,
+                    gate_mode=self._gate_mode,
                     stages=tuple(stages),
                 )
                 atomic_write_json(
@@ -580,6 +587,7 @@ class Orchestrator:
             bibliography_declared=artifacts.bibliography_declared,
             fail_closed=request.fail_closed,
             canceled=self._canceled,
+            gate_mode=self._gate_mode,
         )
         try:
             result = FormalEngine(
@@ -725,7 +733,7 @@ class Orchestrator:
         if state.exit_code is ExitCode.INTERNAL_ERROR:
             return ExitCode.INTERNAL_ERROR
         if formal_findings:
-            return formal_exit_code(formal_findings)
+            return formal_exit_code(formal_findings, mode=self._gate_mode)
         return ExitCode.SUCCESS
 
     @staticmethod
@@ -752,7 +760,8 @@ class Orchestrator:
         findings = tuple(finding for stage in stages for finding in stage.findings)
         report = RunReport(
             tool_version=request.tool_version,
-            exit_code=formal_exit_code(findings),
+            exit_code=formal_exit_code(findings, mode=self._gate_mode),
+            gate_mode=self._gate_mode,
             stages=tuple(stages),
         )
         atomic_write_json(

@@ -17,6 +17,7 @@
     },
     "version": {"const": 1},
     "work_profile": {"enum": ["software", "research", "organizational"]},
+    "gate_mode": {"enum": ["strict", "advisory"]},
     "rubric_path": {"type": "string", "minLength": 1},
     "output_dir": {"type": "string", "minLength": 1},
     "approved_params": {
