@@ -1,6 +1,10 @@
 version: 1
 # Профиль задаёт пользователь; auto/LLM-выбор намеренно не поддерживается.
 work_profile: software
+# strict: formal ERROR со статусом fail или unverifiable блокирует merge (по умолчанию).
+# advisory: блокирует только доказанный fail; blocking unverifiable остаётся в отчёте
+# и даёт gate_status: degraded. Режим включается только явно, автопереключения нет.
+gate_mode: strict
 rubric_path: rubric.yaml
 output_dir: build/normocontrol
 approved_params:

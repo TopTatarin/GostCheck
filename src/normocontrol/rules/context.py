@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from normocontrol.domain import GateMode
 from normocontrol.extract.base import DocumentBundle, SourceFormat
 from normocontrol.rubric.models import EffectiveRubric, NormocontrolConfig
 
@@ -42,6 +43,7 @@ class ExecutionContext:
     bibliography_declared: bool = False
     fail_closed: bool = False
     canceled: bool = False
+    gate_mode: GateMode = GateMode.STRICT
 
     def __post_init__(self) -> None:
         if self.pdf_bundle is not None and self.pdf_bundle.source_format is not SourceFormat.PDF:

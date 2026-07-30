@@ -17,6 +17,7 @@
         "commit_sha",
         "tool_version",
         "gate_status",
+        "gate_mode",
         "degraded",
         "approvals_required",
         "generated_at"
@@ -27,7 +28,8 @@
         "rubric_version": {"type": ["string", "null"]},
         "model_id": {"type": ["string", "null"]},
         "tool_version": {"type": "string", "minLength": 1},
-        "gate_status": {"type": "string", "enum": ["pass", "fail", "error"]},
+        "gate_status": {"type": "string", "enum": ["pass", "fail", "degraded", "error"]},
+        "gate_mode": {"type": "string", "enum": ["strict", "advisory"]},
         "degraded": {"type": "boolean"},
         "approvals_required": {"type": "boolean"},
         "generated_at": {

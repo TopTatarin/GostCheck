@@ -15,6 +15,7 @@ from normocontrol.domain import (
     ExitCode,
     Finding,
     FindingStatus,
+    GateMode,
     RuleLayer,
     RunReport,
     Severity,
@@ -45,6 +46,7 @@ class ReportMeta:
     approvals_required: bool = False
     artifact_name: str | None = None
     repo_root: Path | None = None
+    gate_mode: GateMode = GateMode.STRICT
 
 
 def utc_now() -> datetime:
@@ -155,13 +157,16 @@ def collect_findings(report: RunReport) -> tuple[Finding, ...]:
     return tuple(items)
 
 
-def gate_status_for(report: RunReport) -> str:
+def gate_status_for(report: RunReport, *, mode: GateMode = GateMode.STRICT) -> str:
     """Map exit code / formal findings to a human gate label without changing it."""
-    decision = evaluate_gate(collect_findings(report))
+    decision = evaluate_gate(collect_findings(report), mode=mode)
     if report.exit_code is ExitCode.FORMAL_FAILURE or decision.outcome is GateOutcome.FAIL:
         return "fail"
     if report.exit_code in {ExitCode.CONFIG_ERROR, ExitCode.INTERNAL_ERROR}:
         return "error"
+    if mode is GateMode.ADVISORY and decision.suppressed_unverifiable:
+        # Advisory mode does not block, but the run is explicitly incomplete.
+        return "degraded"
     return "pass"
 
 
@@ -197,7 +202,8 @@ def build_published_report(
             "rubric_version": meta.rubric_version,
             "model_id": meta.model_id,
             "tool_version": report.tool_version,
-            "gate_status": gate_status_for(report),
+            "gate_status": gate_status_for(report, mode=meta.gate_mode),
+            "gate_mode": meta.gate_mode.value,
             "degraded": meta.degraded or counts["blocking_unverifiable"] > 0,
             "approvals_required": meta.approvals_required
             or any("APPROVAL_REQUIRED" in f.message.upper() for f in findings),

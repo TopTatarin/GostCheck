@@ -106,6 +106,7 @@ def render_summary(
     header = published.get("header", {})
     counts = published.get("counts", {})
     gate = str(header.get("gate_status", "unknown")).upper()
+    gate_mode = str(header.get("gate_mode", "strict"))
     artifact = artifact_url or header.get("artifact_name") or "normocontrol-report"
     body = render_markdown(published, templates_dir=templates_dir, collapse_after=5)
     if len(body) <= max_chars:
@@ -126,7 +127,7 @@ def render_summary(
             f"| Blocking unverifiable | {counts.get('blocking_unverifiable', 0)} |",
             f"| Approvals required | {counts.get('approvals_required', 0)} |",
             "",
-            f"Gate: `{gate}` · exit `{published.get('exit_code', 0)}`",
+            f"Gate: `{gate}` (mode `{gate_mode}`) · exit `{published.get('exit_code', 0)}`",
             f"Artifact: `{artifact}`",
             "",
             "<details><summary>Truncated findings</summary>",
