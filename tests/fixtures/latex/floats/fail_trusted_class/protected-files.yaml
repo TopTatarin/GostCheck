@@ -1,0 +1,5 @@
+version: 1
+class_files:
+  - path: gostcheck-vkr.cls
+    sha256: 6a6d9035152cc3b7289f4312bd64680008ef094cf8816227fe41bb434a55a4c2
+allowed_renewcommand: []

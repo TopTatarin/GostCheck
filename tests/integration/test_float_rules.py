@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,11 +12,14 @@ import pytest
 from normocontrol.domain import FindingStatus
 from normocontrol.extract.latex import LatexExtractor
 from normocontrol.extract.pdf import PdfExtractor
+from normocontrol.orchestrator import OrchestratorHooks, run_pipeline
+from normocontrol.reporting.json_report import load_report_schema, validate_published_report
 from normocontrol.rubric.expansion import expand_rubric
 from normocontrol.rubric.loader import load_config, load_rubric
 from normocontrol.rules.context import ExecutionContext, LatexProject
 from normocontrol.rules.engine import FormalEngine
 from normocontrol.rules.register import default_formal_registry
+from normocontrol.run_context import RunRequest, parse_only
 from normocontrol.tools.latexmk import LatexBuildResult, LatexBuildService, LatexBuildStatus
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -178,3 +182,44 @@ def test_fig01_warns_when_caption_too_late_in_pdf(tmp_path: Path) -> None:
     pdf_path = _fig01_pdf(tmp_path / "fig01_warn.pdf", caption_page=3)
     findings = _run_fig01_with_pdf(pdf_path)
     assert FindingStatus.WARN in _statuses(findings, "FIG-01")
+
+
+def test_class_script_rules_unverifiable_without_protected_config() -> None:
+    """Missing protected-files.yaml with a clean script must be UNVERIFIABLE, not FAIL."""
+    _, findings = _run_fixture("missing_class")
+    for rule_id in ("FIG-03", "TAB-02", "MTH-01"):
+        statuses = _statuses(findings, rule_id)
+        assert statuses == (FindingStatus.UNVERIFIABLE,), (rule_id, statuses)
+    messages = " ".join(
+        finding.message for finding in findings if finding.rule_id in ("FIG-03", "TAB-02", "MTH-01")
+    )
+    assert "класс не определяет" not in messages
+    assert "класс не задаёт" not in messages
+    assert "класс не включает" not in messages
+
+
+def test_class_script_rules_fail_preserved_with_trusted_class_missing_setting() -> None:
+    """A trusted class file that genuinely lacks the setting must keep failing."""
+    _, findings = _run_fixture("fail_trusted_class")
+    for rule_id in ("FIG-03", "TAB-02", "MTH-01"):
+        assert FindingStatus.FAIL in _statuses(findings, rule_id), rule_id
+
+
+def test_missing_class_float_report_is_schema_valid(tmp_path: Path) -> None:
+    report = run_pipeline(
+        RunRequest(
+            source=FIXTURES / "missing_class",
+            out_dir=tmp_path / "out",
+            config_path=CONFIG_PATH,
+            rubric_path=RUBRIC_PATH,
+            no_llm=True,
+            only=parse_only(("FIG-03", "TAB-02", "MTH-01")),
+            tool_version="float-missing-class-test",
+        ),
+        OrchestratorHooks(build_service=_SuccessBuildService()),
+    )
+    formal = next(stage for stage in report.stages if stage.name == "formal")
+    for rule_id in ("FIG-03", "TAB-02", "MTH-01"):
+        assert FindingStatus.UNVERIFIABLE in _statuses(formal.findings, rule_id)
+    published = json.loads((tmp_path / "out" / "report.json").read_text(encoding="utf-8"))
+    validate_published_report(published, schema=load_report_schema())

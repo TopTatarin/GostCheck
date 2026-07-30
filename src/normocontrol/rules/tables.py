@@ -80,13 +80,17 @@ class Tab02LongtableContinuationRule:
     def run(self, context: ExecutionContext, rule: EffectiveRule) -> RuleRunOutcome:
         cls_text = class_file_text(context)
         reader = _reader(context)
-        class_ok = cls_text is not None and (
-            re.search(
-                r"\\(?:newcommand|NewDocumentCommand)\{\\vkrlongtable\}",
-                cls_text,
+        class_ok = (
+            None
+            if cls_text is None
+            else (
+                re.search(
+                    r"\\(?:newcommand|NewDocumentCommand)\{\\vkrlongtable\}",
+                    cls_text,
+                )
+                is not None
+                or re.search(r"\\end(?:first)?head\b", cls_text) is not None
             )
-            is not None
-            or re.search(r"\\end(?:first)?head\b", cls_text) is not None
         )
         script_ok = not longtable_without_continuation_header(reader.snapshot.body)
         return combine_class_script(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import pytest
 from normocontrol.domain import FindingStatus
 from normocontrol.extract.latex import LatexExtractor
 from normocontrol.orchestrator import OrchestratorHooks, run_pipeline
+from normocontrol.reporting.json_report import load_report_schema, validate_published_report
 from normocontrol.rubric.expansion import expand_rubric
 from normocontrol.rubric.loader import load_config, load_rubric
 from normocontrol.rules.context import ExecutionContext, LatexProject
@@ -145,3 +147,43 @@ def test_bib_and_review_fixtures_run_through_orchestrator(
     assert all(
         "required source unavailable: bib_files" not in item.message for item in formal.findings
     )
+
+
+def test_bib02_bib03_unverifiable_without_protected_config() -> None:
+    """Missing protected-files.yaml with a clean script must be UNVERIFIABLE, not FAIL."""
+    _, findings = _run_fixture("missing_class")
+    for rule_id in ("BIB-02", "BIB-03"):
+        statuses = _statuses(findings, rule_id)
+        assert statuses == (FindingStatus.UNVERIFIABLE,), (rule_id, statuses)
+    messages = " ".join(
+        finding.message for finding in findings if finding.rule_id in ("BIB-02", "BIB-03")
+    )
+    assert "класс не задаёт" not in messages
+    assert "класс не задаёт ГОСТ-совместимый" not in messages
+
+
+def test_bib02_bib03_fail_preserved_with_trusted_class_missing_setting() -> None:
+    """A trusted class file that genuinely lacks the setting must keep failing."""
+    _, findings = _run_fixture("fail_trusted_class")
+    assert FindingStatus.FAIL in _statuses(findings, "BIB-02")
+    assert FindingStatus.FAIL in _statuses(findings, "BIB-03")
+
+
+def test_missing_class_report_is_schema_valid(tmp_path: Path) -> None:
+    report = run_pipeline(
+        RunRequest(
+            source=FIXTURES / "missing_class",
+            out_dir=tmp_path / "out",
+            config_path=CONFIG_PATH,
+            rubric_path=RUBRIC_PATH,
+            no_llm=True,
+            only=parse_only(("BIB-02", "BIB-03")),
+            tool_version="bib-missing-class-test",
+        ),
+        OrchestratorHooks(build_service=_SuccessBuildService()),
+    )
+    formal = next(stage for stage in report.stages if stage.name == "formal")
+    assert FindingStatus.UNVERIFIABLE in _statuses(formal.findings, "BIB-02")
+    assert FindingStatus.UNVERIFIABLE in _statuses(formal.findings, "BIB-03")
+    published = json.loads((tmp_path / "out" / "report.json").read_text(encoding="utf-8"))
+    validate_published_report(published, schema=load_report_schema())

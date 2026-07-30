@@ -28,9 +28,14 @@ class Mth01NumberedEquationsRule:
         assert context.latex is not None
         cls_text = class_file_text(context)
         reader = LatexProjectReader.load(context.latex.root, context.latex.main_tex)
-        class_ok = cls_text is not None and (
-            re.search(r"\\RequirePackage\{amsmath\}|\\usepackage\{amsmath\}", cls_text) is not None
-            or re.search(r"\\begin\{equation\}", cls_text) is not None
+        class_ok = (
+            None
+            if cls_text is None
+            else (
+                re.search(r"\\RequirePackage\{amsmath\}|\\usepackage\{amsmath\}", cls_text)
+                is not None
+                or re.search(r"\\begin\{equation\}", cls_text) is not None
+            )
         )
         section_body = reader.section_body(_MATH_SECTION)
         if section_body is None:
