@@ -53,7 +53,7 @@ records a written decision.
 | SSA-03 | llm | semantic | semantic suite | implemented | Conditional computational applicability and data-table contract. |
 | SSA-04 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | TSK-01 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
-| TSK-02 | script+llm | semantic | semantic suite | implemented | Semantic portion is implemented; formal heuristic is pending. |
+| TSK-02 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped task-item length heuristic plus advisory expansion check. |
 | TSK-03 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
 | ARC-01 | script+llm | formal + semantic | formal + semantic suites | implemented | Section-scoped figure presence plus advisory as-is/to-be rationale. |
 | ARC-02 | llm | semantic | semantic suite | implemented | Strict advisory RuleSpec and evidence contract. |
@@ -76,6 +76,6 @@ records a written decision.
 
 No written reviewer decisions are present for `ALG-02` or `IMP-02`; therefore they
 remain `pending_decision`, not `manual_required` or `excluded_scope`. `DEP-01`
-requires written approval of the oral norm before implementation. The incomplete
-formal portion of `TSK-02` is also recorded above and is not silently treated as
-covered by its semantic implementation.
+requires written approval of the oral norm before implementation. No written
+decision is invented for any of these three remaining rules, and none is counted
+as PASS.

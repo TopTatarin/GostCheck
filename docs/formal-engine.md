@@ -146,6 +146,16 @@ in document order. Missing sections are `unverifiable`; absent objects produce
 non-blocking warnings. Content interpretation remains in the advisory semantic
 layer.
 
+## Task item length
+
+TSK-02 measures normalized visible characters in `itemize` and `enumerate`
+items found only in the task-definition section. Items shorter than 30
+characters produce a non-blocking warning without disclosing their text.
+Exactly 30 characters pass the formal heuristic. Comments, literal code blocks,
+and lists in other sections are ignored. A missing section or a task section
+without a machine-checkable list is `unverifiable`, never PASS; semantic
+expansion and topic fit remain advisory.
+
 ## Fingerprints
 
 Each finding can be serialized with a stable SHA-256 fingerprint over its JSON
