@@ -257,6 +257,44 @@ def test_algorithm_formal_rules_are_scoped_to_algorithm_section(tmp_path: Path) 
     assert all(finding.status is FindingStatus.PASS for finding in findings)
 
 
+def test_section_float_rules_use_only_their_target_sections(tmp_path: Path) -> None:
+    main_tex = tmp_path / "main.tex"
+    main_tex.write_text(
+        (
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\section{Модель as is}\n"
+            "\\begin{figure}\\caption{As is}\\end{figure}\n"
+            "\\section{Модель to be}\n"
+            "\\begin{figure}\\caption{To be}\\end{figure}\n"
+            "\\section{Экспериментальные результаты}\n"
+            "\\begin{longtable}{ll}A&B\\\\\n"
+            "\\end{longtable}\n"
+            "\\end{document}\n"
+        ),
+        encoding="utf-8",
+    )
+    config = load_config(CONFIG_PATH)
+    effective = _effective_rubric()
+    rule_ids = {"SSA-01", "ARC-01", "RES-01"}
+    rubric = effective.model_copy(
+        update={"rules": tuple(rule for rule in effective.rules if rule.id in rule_ids)}
+    )
+    context = ExecutionContext(
+        rubric=rubric,
+        config=config,
+        bundle=LatexExtractor(tmp_path).extract(main_tex),
+        latex=LatexProject(root=tmp_path, main_tex=main_tex),
+        pdf_path=None,
+        bib_paths=(),
+    )
+
+    findings = FormalEngine(default_formal_registry()).run(context).findings
+
+    assert [finding.rule_id for finding in findings] == ["SSA-01", "ARC-01", "RES-01"]
+    assert all(finding.status is FindingStatus.PASS for finding in findings)
+
+
 def test_sys03_unverifiable_when_latexmk_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("shutil.which", lambda _name: None)
     _, findings = _run_fixture("pass", build_service=LatexBuildService())

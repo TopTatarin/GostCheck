@@ -135,6 +135,17 @@ sections are `unverifiable`; absent structural markers are non-blocking warnings
 with the original rubric severity. Semantic suitability and completeness remain
 advisory and cannot create a blocking failure.
 
+## Section-scoped figures and tables
+
+SSA-01 and ARC-01 require a real `figure` environment in their respective
+as-is and to-be sections. RES-01 requires a `figure`, `table`, or `longtable`
+environment in the results-analysis section. Matches in other sections,
+comments, and literal code blocks are ignored. Recognized alternative headings
+are normalized with Unicode NFC, and multiple matching sections are considered
+in document order. Missing sections are `unverifiable`; absent objects produce
+non-blocking warnings. Content interpretation remains in the advisory semantic
+layer.
+
 ## Fingerprints
 
 Each finding can be serialized with a stable SHA-256 fingerprint over its JSON
