@@ -8,6 +8,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from normocontrol.domain import GateMode
+
 NonEmptyString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 RuleId = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}-[0-9]{2}$")]
 
@@ -157,6 +159,7 @@ class NormocontrolConfig(StrictModel):
 
     version: Literal[1]
     work_profile: WorkProfile
+    gate_mode: GateMode = GateMode.STRICT
     rubric_path: Path = Path("rubric.yaml")
     output_dir: Path = Path("build/normocontrol")
     approved_params: tuple[ParameterName, ...] = ()

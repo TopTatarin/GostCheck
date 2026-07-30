@@ -109,12 +109,15 @@ def build_console_summary(
     findings = collect_findings(report)
     counts = Counter(finding.status.value for finding in findings)
     status_counts = tuple((status.value, counts[status.value]) for status in FindingStatus)
-    blocking = tuple(
-        sorted({finding.rule_id for finding in evaluate_gate(findings).blocking_findings})
-    )
+    decision = evaluate_gate(findings, mode=report.gate_mode)
+    blocking = tuple(sorted({finding.rule_id for finding in decision.blocking_findings}))
     header = _published_header(published)
     degraded = bool(header.get("degraded", False))
-    gate = "PASS" if report.exit_code is ExitCode.SUCCESS and not blocking else "FAIL"
+    if report.exit_code is ExitCode.SUCCESS and not blocking:
+        # ``suppressed_unverifiable`` is always empty in strict mode.
+        gate = "DEGRADED" if decision.suppressed_unverifiable else "PASS"
+    else:
+        gate = "FAIL"
     report_md = out_dir / "report.md"
     report_json = out_dir / "report.json"
     return ConsoleRunSummary(

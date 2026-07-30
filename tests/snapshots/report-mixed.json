@@ -45,6 +45,7 @@
     "artifact_name": "normocontrol-report-deadbee",
     "commit_sha": "deadbeef",
     "degraded": false,
+    "gate_mode": "strict",
     "gate_status": "fail",
     "generated_at": "2026-07-24T00:00:00Z",
     "model_id": null,

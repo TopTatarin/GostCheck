@@ -18,7 +18,7 @@ from rich.console import Console
 from rich.table import Table
 
 from normocontrol.cache import LockError
-from normocontrol.domain import ExitCode, RunReport, StageResult
+from normocontrol.domain import ExitCode, GateMode, RunReport, StageResult
 from normocontrol.errors import ConfigurationError, LocatedValidationError
 from normocontrol.extract.base import DocumentBundle, ExtractionError
 from normocontrol.extract.latex import LatexExtractor
@@ -76,6 +76,21 @@ class CliState:
     """Global command-line switches shared by subcommands."""
 
     no_llm: bool = False
+
+
+GATE_MODE_HELP = "strict (по умолчанию) или advisory; CLI имеет приоритет над конфигурацией."
+
+
+def parse_gate_mode(value: str | None) -> GateMode | None:
+    """Parse ``--gate-mode`` into an enum; unknown values are configuration errors."""
+    if value is None:
+        return None
+    try:
+        return GateMode(value.strip().casefold())
+    except ValueError as error:
+        allowed = ", ".join(item.value for item in GateMode)
+        msg = f"unknown gate mode: {value} (expected one of: {allowed})"
+        raise ConfigurationError(msg) from error
 
 
 def package_version() -> str:
@@ -250,9 +265,11 @@ def run_formal_check(
     config_path: Path,
     profile: str | None = None,
     project_root: Path | None = None,
+    gate_mode: GateMode | None = None,
 ) -> RunReport:
     """Extract inputs and run deterministic formal rules."""
     rubric, config = load_effective_rubric_for_check(rubric_path, config_path, profile)
+    effective_gate_mode = gate_mode or config.gate_mode
     root = project_root or source.parent
     suffix = source.suffix.casefold()
     latex: LatexProject | None = None
@@ -280,11 +297,13 @@ def run_formal_check(
         pdf_path=pdf_path,
         bib_paths=bib_paths,
         bibliography_declared=bibliography_declared,
+        gate_mode=effective_gate_mode,
     )
     result = FormalEngine(default_formal_registry()).run(context)
     return RunReport(
         tool_version=package_version(),
         exit_code=ExitCode(result.exit_code),
+        gate_mode=effective_gate_mode,
         stages=(StageResult(name="formal", findings=result.findings),),
     )
 
@@ -499,6 +518,10 @@ def run_command(
         bool,
         typer.Option("--fail-closed", help="Инструментальные сбои formal/build дают exit 4."),
     ] = False,
+    gate_mode: Annotated[
+        str | None,
+        typer.Option("--gate-mode", help=GATE_MODE_HELP),
+    ] = None,
 ) -> None:
     """Run build -> formal -> semantic -> aggregate with documented exit codes."""
     state = ctx.find_root().obj
@@ -514,6 +537,7 @@ def run_command(
     )
     try:
         only_filter = parse_only(tuple(only) if only else None)
+        selected_gate_mode = parse_gate_mode(gate_mode)
         request = RunRequest(
             source=source,
             out_dir=out,
@@ -529,6 +553,7 @@ def run_command(
             apply_final_severity=final,
             fail_closed=fail_closed,
             tool_version=package_version(),
+            gate_mode=selected_gate_mode,
         )
         report = run_pipeline(request)
     except ConfigurationError as error:
@@ -615,8 +640,17 @@ def check_command(
         Path | None,
         typer.Option("--project-root", help="Корень LaTeX-проекта для include."),
     ] = None,
+    gate_mode: Annotated[
+        str | None,
+        typer.Option("--gate-mode", help=GATE_MODE_HELP),
+    ] = None,
 ) -> None:
     """Run deterministic formal checks and emit a RunReport JSON."""
+    try:
+        selected_gate_mode = parse_gate_mode(gate_mode)
+    except ConfigurationError as error:
+        echo_console(f"ERROR {error}", err=True)
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from error
     try:
         report = run_formal_check(
             source,
@@ -624,6 +658,7 @@ def check_command(
             config_path=config,
             profile=profile,
             project_root=project_root,
+            gate_mode=selected_gate_mode,
         )
     except (ExtractionError, LocatedValidationError) as error:
         echo_console(f"ERROR {error}", err=True)

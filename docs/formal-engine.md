@@ -1,10 +1,10 @@
 # Formal rule engine
 
 The formal engine executes deterministic `class` and `script` rubric rules. It is
-the blocking path for merge gates: findings with `severity=error` and either
-`status=fail` or `status=unverifiable` on a formal layer produce exit code `2`.
-An `unverifiable` result is reported as an incomplete check, not as a confirmed
-violation.
+the blocking path for merge gates: in the default `strict` gate mode, findings
+with `severity=error` and either `status=fail` or `status=unverifiable` on a
+formal layer produce exit code `2`. An `unverifiable` result is reported as an
+incomplete check, not as a confirmed violation.
 
 ## Components
 
@@ -38,10 +38,33 @@ Blocking finding:
 
 - layer is `class`, `script`, or `class+script`
 - severity is `error`
-- status is `fail` (confirmed violation) or `unverifiable` (blocking incomplete check)
+- status is `fail` (confirmed violation) or, in `strict` mode only,
+  `unverifiable` (blocking incomplete check)
 
 Non-blocking: warning/info severities, `not_applicable`, and all advisory
 LLM/vision `unverifiable` findings.
+
+### Gate modes
+
+`GateMode` is threaded through `evaluate_gate`, `blocks_merge` and
+`formal_exit_code` as a keyword-only argument that defaults to `strict`, so every
+existing call site keeps the historic behaviour.
+
+| Mode | `error` + `fail` | `error` + `unverifiable` | Gate status without proven failures |
+|---|---|---|---|
+| `strict` (default) | blocks, exit `2` | blocks, exit `2` | `fail` |
+| `advisory` | blocks, exit `2` | does not block, exit `0` | `degraded` |
+
+`advisory` changes the decision only. Suppressed findings stay in `report.json`
+with `severity=error`, keep incrementing `counts.blocking_unverifiable` and still
+set `header.degraded`; `finding_is_blocking_unverifiable` is a pure counter and
+never depends on the mode. `is_formal_layer` is unchanged, so semantic and vision
+findings remain outside the gate in both modes.
+
+The mode is selected explicitly by `--gate-mode` or the `gate_mode` configuration
+key (CLI wins). There is no implicit fallback to `advisory` when a file such as
+`protected-files.yaml` is missing — silently weakening the gate is not supported.
+The applied mode is recorded in `header.gate_mode`.
 
 With `fail_closed=true`, isolated tool errors become blocking `fail` findings.
 With `fail_closed=false`, the same errors are reported as `unverifiable` warnings.

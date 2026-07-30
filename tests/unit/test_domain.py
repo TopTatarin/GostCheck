@@ -107,6 +107,7 @@ def test_minimal_report_json_snapshot_has_no_timestamp() -> None:
   "schema_version": "1.0",
   "tool_version": "0.1.0",
   "exit_code": 0,
+  "gate_mode": "strict",
   "stages": []
 }"""
     )

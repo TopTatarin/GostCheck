@@ -120,11 +120,11 @@ class FormalEngine:
             raw_findings = self._run_parallel(context, formal_rules, rubric_index)
 
         findings = self._sort_findings(tuple(raw_findings), rubric_index)
-        gate = evaluate_gate(findings)
+        gate = evaluate_gate(findings, mode=context.gate_mode)
         return EngineRunResult(
             findings=findings,
             gate=gate,
-            exit_code=int(formal_exit_code(findings)),
+            exit_code=int(formal_exit_code(findings, mode=context.gate_mode)),
         )
 
     def _run_parallel(

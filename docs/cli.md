@@ -22,6 +22,7 @@ normocontrol run PATH \
   [--only STAGE_OR_PREFIX ...] \
   [--final] \
   [--fail-closed] \
+  [--gate-mode strict|advisory] \
   [--no-llm]
 ```
 
@@ -70,7 +71,7 @@ CP1251 при перенаправлении на Windows) не представ
 |----:|----------|
 | 0 | Успех или только неблокирующие advisory-результаты |
 | 1 | Ошибка выполнения команды вне formal gate (зарезервированный публичный runtime-код) |
-| 2 | Formal gate fail: `error+fail` либо блокирующий `error+unverifiable` |
+| 2 | Formal gate fail: `error+fail` либо блокирующий `error+unverifiable` (в `--gate-mode advisory` — только `error+fail`) |
 | 3 | Ошибка конфигурации/входа (нет файла, неизвестный `--only`/`--profile`, lock) |
 | 4 | Внутренняя/инструментальная ошибка при `--fail-closed` |
 
@@ -90,6 +91,35 @@ PyMuPDF. FMT-04 может быть блокирующим `unverifiable`, по�
 ## `--final`
 
 Явно применяет `severity_final` из рубрики (например `ANN-03`, `REV-01`). Без флага draft-severity не повышается.
+
+## `--gate-mode`
+
+| Режим | Что блокирует merge |
+|---|---|
+| `strict` (по умолчанию) | formal `error` со статусом `fail` **и** блокирующий `unverifiable` |
+| `advisory` | только доказанный formal `error` + `fail` |
+
+В режиме `advisory` блокирующие `unverifiable` остаются в `report.json` с прежней
+severity `error`, продолжают считаться в `counts.blocking_unverifiable` и
+по-прежнему включают `header.degraded`. Меняется только решение гейта: прогон без
+доказанных нарушений завершается кодом `0` и `header.gate_status: degraded`.
+Это позволяет отличить «есть доказанное нарушение» (`fail`, exit `2`) от
+«нечем проверить» (`degraded`, exit `0`).
+
+Режим включается **только явно** — флагом или ключом `gate_mode` в конфигурации;
+автоматического перехода в `advisory` при отсутствии `protected-files.yaml` или
+любого другого файла нет. CLI имеет приоритет над конфигурацией, как
+`--provider`/`--model`/`--base-url`. Недопустимое значение флага или ключа даёт
+код `3`. Фактически применённый режим всегда записывается в `header.gate_mode`.
+
+```yaml
+# normocontrol.yaml
+gate_mode: advisory
+```
+
+```bash
+normocontrol run tests/fixtures/pdf/fmt_pass.pdf --no-llm --gate-mode advisory --out build/advisory
+```
 
 ## Артефакты `--out`
 

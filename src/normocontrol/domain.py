@@ -40,6 +40,13 @@ class FindingStatus(StrEnum):
     SKIPPED = "skipped"
 
 
+class GateMode(StrEnum):
+    """Formal merge gate strictness selected explicitly by the user."""
+
+    STRICT = "strict"
+    ADVISORY = "advisory"
+
+
 class ExitCode(IntEnum):
     """Documented process exit codes shared by CLI commands and reports."""
 
@@ -118,15 +125,21 @@ class RunReport(ContractModel):
     schema_version: str = "1.0"
     tool_version: str
     exit_code: ExitCode = ExitCode.SUCCESS
+    gate_mode: GateMode = GateMode.STRICT
     stages: tuple[StageResult, ...] = ()
 
     @model_validator(mode="after")
     def validate_exit_code(self) -> Self:
-        """Keep the serialized exit code consistent with formal findings."""
+        """Keep the serialized exit code consistent with formal findings and gate mode."""
+        blocking_statuses = (
+            {FindingStatus.FAIL, FindingStatus.UNVERIFIABLE}
+            if self.gate_mode is GateMode.STRICT
+            else {FindingStatus.FAIL}
+        )
         has_blocking_formal_finding = any(
             finding.layer in {RuleLayer.CLASS, RuleLayer.SCRIPT, RuleLayer.CLASS_SCRIPT}
             and finding.severity is Severity.ERROR
-            and finding.status in {FindingStatus.FAIL, FindingStatus.UNVERIFIABLE}
+            and finding.status in blocking_statuses
             for stage in self.stages
             for finding in stage.findings
         )
