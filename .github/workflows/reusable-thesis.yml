@@ -263,7 +263,7 @@ jobs:
     steps:
       - name: Publish or refresh metadata-only PR comment
         continue-on-error: true
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           CHECKED_PATH: >-
             ${{ needs.formal-gate.outputs.submission_path || inputs.submission_path }}
