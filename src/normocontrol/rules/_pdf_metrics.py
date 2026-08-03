@@ -272,9 +272,11 @@ def _marginal_zone(span: TextSpan, page: PageInfo) -> str | None:
 def classify_marginal_spans(
     spans: tuple[TextSpan, ...],
     pages: tuple[PageInfo, ...],
+    *,
+    excluded_pages: frozenset[int] = frozenset(),
 ) -> dict[int, str]:
     """Classify deterministic page numbers and repeated header/footer spans."""
-    page_by_number = {page.number: page for page in pages}
+    page_by_number = {page.number: page for page in pages if page.number not in excluded_pages}
     classified: dict[int, str] = {}
     repeated: dict[tuple[str, str], list[tuple[int, int, float]]] = defaultdict(list)
 
@@ -302,7 +304,7 @@ def classify_marginal_spans(
             relative_y = span.bbox.y0 / metric_page.height
             repeated[(zone, normalized)].append((index, span.page, relative_y))
 
-    required_pages = max(2, math.ceil(len(pages) * 0.5))
+    required_pages = max(2, math.ceil(len(page_by_number) * 0.5))
     for (zone, _), candidates in repeated.items():
         page_numbers = {item[1] for item in candidates}
         relative_positions = [item[2] for item in candidates]
@@ -572,9 +574,15 @@ def _dominant_font_size(spans: Iterable[TextSpan]) -> float | None:
 def select_body_spans(
     spans: tuple[TextSpan, ...],
     pages: tuple[PageInfo, ...],
+    *,
+    excluded_pages: frozenset[int] = frozenset(),
 ) -> BodySpanSelection:
-    """Separate reliable body text from headings, code, formulae and marginalia."""
-    marginal = classify_marginal_spans(spans, pages)
+    """Separate reliable body text from headings, code, formulae and marginalia.
+
+    ``excluded_pages`` is intentionally supplied only by the conservative page-role
+    sidecar.  Callers must never infer it from a page number alone.
+    """
+    marginal = classify_marginal_spans(spans, pages, excluded_pages=excluded_pages)
     candidates: list[tuple[int, TextSpan]] = []
     excluded: Counter[str] = Counter()
     retained: Counter[str] = Counter()
@@ -582,6 +590,9 @@ def select_body_spans(
 
     for index, span in enumerate(spans):
         chars = significant_character_count(span.text)
+        if span.page in excluded_pages:
+            excluded["service_page"] += chars
+            continue
         if chars < 1 or span.font_size is None or span.font_size <= 0:
             excluded["artifact"] += chars
             continue
@@ -882,10 +893,11 @@ def check_body_margins(
     pages: tuple[PageInfo, ...],
     *,
     geometry_tolerance_pt: float = 0.0,
+    excluded_pages: frozenset[int] = frozenset(),
 ) -> MarginCheckResult:
     """Measure non-marginal content without hiding the whole page footer zone."""
     page_by_number = {page.number: _metric_page(page) for page in pages}
-    marginal = classify_marginal_spans(spans, pages)
+    marginal = classify_marginal_spans(spans, pages, excluded_pages=excluded_pages)
     excluded: Counter[str] = Counter()
     content: list[TextSpan] = []
     violations: list[MarginViolation] = []
@@ -895,6 +907,9 @@ def check_body_margins(
 
     for index, span in enumerate(spans):
         chars = significant_character_count(span.text)
+        if span.page in excluded_pages:
+            excluded["service_page"] += max(chars, 1)
+            continue
         if chars < 2 and index not in marginal:
             continue
         marginal_kind = marginal.get(index)
@@ -1001,12 +1016,15 @@ def check_layout_object_margins(
     pages: tuple[PageInfo, ...],
     *,
     geometry_tolerance_pt: float = 0.0,
+    excluded_pages: frozenset[int] = frozenset(),
 ) -> LayoutMarginCheckResult:
     """Check image/vector bounds while excluding only repeated marginal objects."""
-    page_by_number = {page.number: _metric_page(page) for page in pages}
+    page_by_number = {
+        page.number: _metric_page(page) for page in pages if page.number not in excluded_pages
+    }
     repetitions: dict[tuple[str, str, str], list[PdfLayoutObject]] = defaultdict(list)
     marginal: set[PdfLayoutObject] = set()
-    required_pages = max(2, math.ceil(len(pages) * 0.5))
+    required_pages = max(2, math.ceil(len(page_by_number) * 0.5))
 
     for item in objects:
         page = page_by_number.get(item.page)
@@ -1026,6 +1044,9 @@ def check_layout_object_margins(
     max_observed: LayoutMarginViolation | None = None
     max_observed_delta = -1.0
     for item in objects:
+        if item.page in excluded_pages:
+            excluded[f"service_page_{item.kind}"] += 1
+            continue
         if item in marginal:
             excluded[f"repeated_{item.kind}_marginalia"] += 1
             continue

@@ -18,7 +18,10 @@ from normocontrol.extract.base import (
     sha256_text,
 )
 from normocontrol.rules._pdf_metrics import (
+    PdfLayoutObject,
     bbox_within_margins,
+    check_body_margins,
+    check_layout_object_margins,
     font_size_match_ratio,
     is_times_new_roman,
     margin_bounds,
@@ -236,6 +239,185 @@ def test_fmt01_excludes_heading_and_code_from_body_ratio() -> None:
 
     assert selection.spans == (bundle.spans[1],)
     assert outcome.findings[0].status is FindingStatus.PASS
+
+
+def test_service_template_is_excluded_but_main_body_font_violation_still_fails() -> None:
+    pages = (
+        _page := PageInfo(number=1, width=595.0, height=842.0, rotation=0),
+        PageInfo(number=2, width=595.0, height=842.0, rotation=0),
+    )
+    service = _span(
+        text="УНИВЕРСИТЕТ ВЫПУСКНАЯ КВАЛИФИКАЦИОННАЯ РАБОТА БАКАЛАВРА НАПРАВЛЕНИЕ ПОДГОТОВКИ",
+        page=1,
+        font="Helvetica",
+        font_size=12.0,
+    )
+    introduction = _span(text="Введение", page=2, y0=80.0)
+    body = _span(
+        text="x" * 120,
+        page=2,
+        font="Helvetica",
+        font_size=12.0,
+        y0=140.0,
+    )
+    bundle = _pdf_bundle(service, introduction, body, pages=pages)
+
+    outcome = Fmt01BodyFontRule().run(
+        _pdf_context("FMT-01", bundle), effective_rule("FMT-01", layer="class")
+    )
+
+    assert outcome.findings[0].status is FindingStatus.FAIL
+    evidence = " ".join(item.description or "" for item in outcome.findings[0].evidence)
+    assert "service_pages=1" in evidence
+    assert "mismatch_pages=2:" in evidence
+
+
+def test_service_template_font_and_margin_deviations_do_not_fail_main_metrics() -> None:
+    pages = (
+        PageInfo(number=1, width=595.0, height=842.0, rotation=0),
+        PageInfo(number=2, width=595.0, height=842.0, rotation=0),
+    )
+    service = _span(
+        text="Задание на выполнение выпускной квалификационной работы Студент Исходные данные",
+        page=1,
+        font="Helvetica",
+        font_size=12.0,
+        x0=1.0,
+    )
+    introduction = _span(text="Введение", page=2, y0=80.0)
+    body = _span(text="x" * 120, page=2, y0=140.0)
+    bundle = _pdf_bundle(service, introduction, body, pages=pages)
+
+    fmt01 = (
+        Fmt01BodyFontRule()
+        .run(_pdf_context("FMT-01", bundle), effective_rule("FMT-01", layer="class"))
+        .findings[0]
+    )
+    fmt05 = (
+        Fmt05MarginsRule()
+        .run(_pdf_context("FMT-05", bundle), effective_rule("FMT-05", layer="class"))
+        .findings[0]
+    )
+
+    assert fmt01.status is FindingStatus.PASS
+    assert fmt05.status is FindingStatus.PASS
+    assert "service_pages=1" in " ".join(item.description or "" for item in fmt01.evidence)
+    assert "service_page" in " ".join(item.description or "" for item in fmt05.evidence)
+
+
+def test_service_only_document_is_unverifiable_and_never_passes_thesis_rules() -> None:
+    page = PageInfo(number=1, width=595.0, height=842.0, rotation=0)
+    service = _span(
+        text="Задание на выполнение выпускной квалификационной работы Студент Исходные данные",
+        page=1,
+        font="Helvetica",
+        font_size=12.0,
+        x0=1.0,
+    )
+    bundle = _pdf_bundle(service, pages=(page,))
+
+    findings = (
+        Fmt01BodyFontRule()
+        .run(_pdf_context("FMT-01", bundle), effective_rule("FMT-01", layer="class"))
+        .findings[0],
+        Fmt05MarginsRule()
+        .run(_pdf_context("FMT-05", bundle), effective_rule("FMT-05", layer="class"))
+        .findings[0],
+    )
+
+    assert all(finding.status is FindingStatus.UNVERIFIABLE for finding in findings)
+    assert all(
+        "document_kind=service_document"
+        in " ".join(item.description or "" for item in finding.evidence)
+        for finding in findings
+    )
+
+
+def test_fmt02_and_fmt03_publish_safe_service_page_scope_evidence() -> None:
+    pages = (
+        PageInfo(number=1, width=595.0, height=842.0, rotation=0),
+        PageInfo(number=2, width=595.0, height=842.0, rotation=0),
+    )
+    service = _span(
+        text="Задание на выполнение выпускной квалификационной работы Студент Исходные данные",
+        page=1,
+        font_size=12.0,
+    )
+    heading = _span(text="Основной раздел", page=2, font="Times-Bold", font_size=16.0)
+    body = tuple(
+        _span(text=f"Строка основного текста номер {index}.", page=2, y0=140.0 + index * 21.0)
+        for index in range(3)
+    )
+    bundle = _pdf_bundle(service, heading, *body, pages=pages)
+
+    fmt02 = (
+        Fmt02HeadingBoldRule()
+        .run(_pdf_context("FMT-02", bundle), effective_rule("FMT-02", layer="class"))
+        .findings[0]
+    )
+    fmt03 = (
+        Fmt03LineSpacingRule()
+        .run(_pdf_context("FMT-03", bundle), effective_rule("FMT-03", layer="class"))
+        .findings[0]
+    )
+
+    for finding in (fmt02, fmt03):
+        evidence = " ".join(item.description or "" for item in finding.evidence)
+        assert "classification=body" in evidence
+        assert "service_pages=1" in evidence
+        assert "Задание" not in evidence
+
+
+def test_layout_objects_on_service_page_are_filtered_but_body_objects_remain_measured() -> None:
+    pages = (
+        PageInfo(number=1, width=595.0, height=842.0, rotation=0),
+        PageInfo(number=2, width=595.0, height=842.0, rotation=0),
+    )
+    objects = (
+        PdfLayoutObject(
+            page=1,
+            bbox=BoundingBox(x0=1.0, y0=100.0, x1=100.0, y1=200.0),
+            kind="vector",
+            signature="service-frame",
+        ),
+        PdfLayoutObject(
+            page=2,
+            bbox=BoundingBox(x0=1.0, y0=100.0, x1=100.0, y1=200.0),
+            kind="vector",
+            signature="body-frame",
+        ),
+    )
+
+    result = check_layout_object_margins(objects, pages, excluded_pages=frozenset({1}))
+
+    assert len(result.violations) == 1
+    assert result.violations[0].item.page == 2
+    assert dict(result.excluded_counts)["service_page_vector"] == 1
+
+
+def test_service_pages_do_not_dilute_repeated_body_footer_detection() -> None:
+    pages = tuple(
+        PageInfo(number=number, width=595.0, height=842.0, rotation=0) for number in range(1, 6)
+    )
+    bundle = _pdf_bundle(
+        _span(text="service form one", page=1, x0=1.0, y0=100.0),
+        _span(text="service form two", page=2, x0=1.0, y0=100.0),
+        _span(text="service form three", page=3, x0=1.0, y0=100.0),
+        _span(text="Body page four", page=4, y0=120.0),
+        _span(text="Department footer 2026", page=4, x0=30.0, y0=800.0),
+        _span(text="Body page five", page=5, y0=120.0),
+        _span(text="Department footer 2026", page=5, x0=30.0, y0=800.0),
+        pages=pages,
+    )
+
+    result = check_body_margins(
+        bundle.spans,
+        bundle.pages,
+        excluded_pages=frozenset({1, 2, 3}),
+    )
+
+    assert result.violations == ()
+    assert dict(result.excluded_counts)["repeated_footer"] > 0
 
 
 def test_fmt01_characterization_keeps_ordinary_14pt_body() -> None:
