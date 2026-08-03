@@ -15,6 +15,7 @@ from normocontrol.extract.base import (
     sha256_text,
 )
 from normocontrol.extract.chunking import estimate_tokens
+from normocontrol.extract.page_roles import analyze_page_roles
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,6 +199,17 @@ class BatchPlanner:
     """Select only rule-relevant sections and a hard-bounded subset of their chunks."""
 
     def plan(self, bundle: DocumentBundle, spec: RuleSpec) -> RuleBatch:
+        service_pages = analyze_page_roles(
+            bundle.spans, bundle.pages, sections=bundle.sections
+        ).excluded_service_pages
+
+        def intersects_service_page(chunk: DocumentChunk) -> bool:
+            if chunk.page_start is None or chunk.page_end is None:
+                return False
+            return any(
+                page in service_pages for page in range(chunk.page_start, chunk.page_end + 1)
+            )
+
         def has_body(section: Section) -> bool:
             section_text = bundle.text[section.char_start : section.char_end]
             lines = section_text.splitlines()
@@ -238,6 +250,7 @@ class BatchPlanner:
                 candidates = tuple(
                     chunk for chunk in bundle.chunks if chunk.section_id == section.section_id
                 )
+            candidates = tuple(chunk for chunk in candidates if not intersects_service_page(chunk))
             chunks.extend(_bounded_section_chunks(candidates, spec.max_chunks_per_section))
         bounded = tuple(chunks[: spec.max_total_chunks])
         selected_ids = {chunk.section_id for chunk in bounded}

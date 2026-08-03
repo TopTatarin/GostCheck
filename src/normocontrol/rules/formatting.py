@@ -6,6 +6,7 @@ import re
 
 from normocontrol.domain import Evidence, FindingStatus, RuleLayer
 from normocontrol.extract.base import BoundingBox, TextSpan
+from normocontrol.extract.page_roles import PageRoleAnalysis, analyze_page_roles
 from normocontrol.rubric.models import EffectiveRule
 from normocontrol.rules._class_text import class_file_text
 from normocontrol.rules._findings import make_rule_finding
@@ -174,6 +175,23 @@ def _fmt01_evidence(
     )
 
 
+def _page_scope_evidence(
+    rule_id: str,
+    *,
+    path: str | None,
+    page: int | None,
+    roles: PageRoleAnalysis,
+) -> tuple[Evidence, ...]:
+    """Publish safe page-scope diagnostics without altering finding schemas."""
+    return _metric_evidence(
+        rule_id,
+        path=path,
+        page=page,
+        bbox=None,
+        description=f"rule_id={rule_id}; classification=body; {roles.evidence_summary()}",
+    )
+
+
 def _first_span_on_page(spans: tuple[TextSpan, ...], page: int | None) -> TextSpan | None:
     if page is None:
         return spans[0] if spans else None
@@ -255,7 +273,14 @@ class Fmt01BodyFontRule:
         pdf_bundle = context.pdf_metrics_bundle
         if pdf_metrics_available(context):
             assert pdf_bundle is not None
-            selection = select_body_spans(pdf_bundle.spans, pdf_bundle.pages)
+            roles = analyze_page_roles(
+                pdf_bundle.spans, pdf_bundle.pages, sections=pdf_bundle.sections
+            )
+            selection = select_body_spans(
+                pdf_bundle.spans,
+                pdf_bundle.pages,
+                excluded_pages=roles.excluded_service_pages,
+            )
             spans = selection.spans
             invalid_chars = dict(selection.excluded_chars).get("invalid_bbox", 0)
             if spans and selection.significant_chars >= 1:
@@ -341,6 +366,7 @@ class Fmt01BodyFontRule:
                         "classification",
                         f"excluded={excluded or 'none'}; retained={retained or 'none'}",
                     ),
+                    ("page_scope", roles.evidence_summary()),
                     (
                         "mismatch_pages",
                         f"mismatch_pages={mismatch_page_text or 'none'}",
@@ -375,6 +401,7 @@ class Fmt01BodyFontRule:
                         "classification",
                         f"excluded={excluded or 'none'}; retained={retained or 'none'}",
                     ),
+                    ("page_scope", roles.evidence_summary()),
                 )
                 pdf_evidence = _fmt01_evidence(
                     rule.id,
@@ -438,10 +465,21 @@ class Fmt02HeadingBoldRule:
             is not None
         )
         pdf_ok: bool | None = None
+        pdf_path = _pdf_source_path(context)
+        pdf_page: int | None = None
+        pdf_evidence: tuple[Evidence, ...] = ()
         if pdf_metrics_available(context):
             pdf_bundle = context.pdf_metrics_bundle
             assert pdf_bundle is not None
-            headings = heading_spans(pdf_bundle.spans)
+            roles = analyze_page_roles(
+                pdf_bundle.spans, pdf_bundle.pages, sections=pdf_bundle.sections
+            )
+            measured_spans = tuple(
+                span for span in pdf_bundle.spans if span.page not in roles.excluded_service_pages
+            )
+            headings = heading_spans(measured_spans)
+            pdf_page = headings[0].page if headings else None
+            pdf_evidence = _page_scope_evidence(rule.id, path=pdf_path, page=pdf_page, roles=roles)
             if not headings:
                 pdf_ok = None
             else:
@@ -457,6 +495,9 @@ class Fmt02HeadingBoldRule:
             pdf_fail_message="PDF-заголовки не содержат bold-спанов",
             class_missing_message="защищённый .cls недоступен",
             pdf_missing_message="PDF text layer недоступен для проверки заголовков",
+            pdf_path=pdf_path,
+            pdf_page=pdf_page,
+            pdf_evidence=pdf_evidence,
         )
 
 
@@ -477,10 +518,21 @@ class Fmt03LineSpacingRule:
                 or re.search(r"\\linespread\s*\{\s*1\.5\s*\}", cls_text) is not None
             )
         pdf_ok: bool | None = None
+        pdf_path = _pdf_source_path(context)
+        pdf_page: int | None = None
+        pdf_evidence: tuple[Evidence, ...] = ()
         if pdf_metrics_available(context):
             pdf_bundle = context.pdf_metrics_bundle
             assert pdf_bundle is not None
-            ratio = median_line_spacing_ratio(pdf_bundle.spans)
+            roles = analyze_page_roles(
+                pdf_bundle.spans, pdf_bundle.pages, sections=pdf_bundle.sections
+            )
+            measured_spans = tuple(
+                span for span in pdf_bundle.spans if span.page not in roles.excluded_service_pages
+            )
+            pdf_page = measured_spans[0].page if measured_spans else None
+            pdf_evidence = _page_scope_evidence(rule.id, path=pdf_path, page=pdf_page, roles=roles)
+            ratio = median_line_spacing_ratio(measured_spans)
             if ratio is None:
                 pdf_ok = None
             else:
@@ -497,6 +549,9 @@ class Fmt03LineSpacingRule:
             pdf_fail_message="медиана межстрочного интервала вне 1,5±10%",
             class_missing_message="защищённый .cls недоступен",
             pdf_missing_message="PDF text layer недоступен для проверки интервала",
+            pdf_path=pdf_path,
+            pdf_page=pdf_page,
+            pdf_evidence=pdf_evidence,
         )
 
 
@@ -552,15 +607,20 @@ class Fmt05MarginsRule:
         pdf_bundle = context.pdf_metrics_bundle
         if pdf_bundle is not None and pdf_bundle.pages:
             geometry_tolerance_pt = effective_geometry_tolerance_pt(context)
+            roles = analyze_page_roles(
+                pdf_bundle.spans, pdf_bundle.pages, sections=pdf_bundle.sections
+            )
             measurement = check_body_margins(
                 pdf_bundle.spans,
                 pdf_bundle.pages,
                 geometry_tolerance_pt=geometry_tolerance_pt,
+                excluded_pages=roles.excluded_service_pages,
             )
             layout_measurement = check_layout_object_margins(
                 extract_pdf_layout_objects(context.pdf_path),
                 pdf_bundle.pages,
                 geometry_tolerance_pt=geometry_tolerance_pt,
+                excluded_pages=roles.excluded_service_pages,
             )
             if measurement.violations:
                 pdf_ok = False
@@ -586,7 +646,7 @@ class Fmt05MarginsRule:
                     page=pdf_page,
                     bbox=violation_bbox,
                     description=description,
-                )
+                ) + _page_scope_evidence(rule.id, path=pdf_path, page=pdf_page, roles=roles)
             elif layout_measurement.violations:
                 pdf_ok = False
                 layout_violation = layout_measurement.violations[0]
@@ -611,7 +671,7 @@ class Fmt05MarginsRule:
                     page=pdf_page,
                     bbox=layout_bbox,
                     description=description,
-                )
+                ) + _page_scope_evidence(rule.id, path=pdf_path, page=pdf_page, roles=roles)
             elif measurement.invalid_bbox_count:
                 diagnostic_span = _first_span_on_page(pdf_bundle.spans, None)
                 pdf_page = (
@@ -637,7 +697,7 @@ class Fmt05MarginsRule:
                     page=pdf_page,
                     bbox=diagnostic_bbox,
                     description=description,
-                )
+                ) + _page_scope_evidence(rule.id, path=pdf_path, page=pdf_page, roles=roles)
             elif measurement.content_spans:
                 pdf_ok = True
                 body_observation = measurement.max_observed
@@ -702,7 +762,7 @@ class Fmt05MarginsRule:
                     page=pdf_page,
                     bbox=observed_bbox,
                     description=description,
-                )
+                ) + _page_scope_evidence(rule.id, path=pdf_path, page=pdf_page, roles=roles)
             else:
                 diagnostic_span = _first_span_on_page(pdf_bundle.spans, None)
                 pdf_page = (
@@ -737,7 +797,7 @@ class Fmt05MarginsRule:
                     page=pdf_page,
                     bbox=empty_bbox,
                     description=description,
-                )
+                ) + _page_scope_evidence(rule.id, path=pdf_path, page=pdf_page, roles=roles)
         return _combine_class_pdf(
             context,
             rule,
